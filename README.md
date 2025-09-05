@@ -1,15 +1,11 @@
-# Omni Transaction Rust library
+# Signet.rs
 
-Library to construct transactions for different chains inside Near contracts and Rust clients.
+> **Note**: This is a fork of [near/omni-transaction-rs](https://github.com/near/omni-transaction-rs), originally developed by NEAR Protocol.
 
-[![Telegram chat][telegram-badge]][telegram-url]
+A Rust library for constructing and signing transactions across multiple blockchain networks.
 
-[telegram-badge]: https://img.shields.io/endpoint?color=neon&style=for-the-badge&url=https://tg.sumanjay.workers.dev/chain_abstraction
-[telegram-url]: https://t.me/chain_abstraction
+## Supported Chains
 
-## Supported chains
-
-- NEAR
 - Ethereum
 - Bitcoin
 
@@ -17,37 +13,12 @@ Library to construct transactions for different chains inside Near contracts and
 
 ```toml
 [dependencies]
-omni-transaction = "0.2.1"
+signet-rs = "0.2.4"
 ```
 
 ## Examples
 
-For a complete set of examples see the [examples](https://github.com/Omni-rs/examples.git) repository.
-
-Building a NEAR transaction:
-```rust
-let signer_id = "alice.near";
-let signer_public_key = "ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp";
-let nonce = U64(0);
-let receiver_id = "bob.near";
-let block_hash_str = "4reLvkAWfqk5fsqio1KLudk46cqRz9erQdaHkWZKMJDZ";
-let transfer_action = Action::Transfer(TransferAction { deposit: U128(1) });
-let actions = vec![transfer_action];
-
-let near_tx = TransactionBuilder::new::<NEAR>()
-    .signer_id(signer_id.to_string())
-    .signer_public_key(signer_public_key.to_public_key().unwrap())
-    .nonce(nonce)
-    .receiver_id(receiver_id.to_string())
-    .block_hash(block_hash_str.to_block_hash().unwrap())
-    .actions(actions)
-    .build();
-
-// Now you have access to build_for_signing that returns the encoded payload
-let near_tx_encoded = near_tx.build_for_signing();
-```
-
-Building an Ethereum transaction:
+### Ethereum Transaction
 
 ```rust
 let to_address_str = "d8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
@@ -75,7 +46,7 @@ let evm_tx = TransactionBuilder::new::<EVM>()
 let rlp_encoded = evm_tx.build_for_signing();
 ```
 
-Building a Bitcoin transaction:
+### Bitcoin Transaction
 
 ```rust
 let txid_str = "2ece6cd71fee90ff613cee8f30a52c3ecc58685acf9b817b9c467b7ff199871c";
@@ -117,3 +88,15 @@ let bitcoin_tx = TransactionBuilder::new::<BITCOIN>()
 // Prepare the transaction for signing
 let encoded_tx = bitcoin_tx.build_for_signing_legacy(EcdsaSighashType::All);
 ```
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE-APACHE](LICENSE-APACHE) file for details.
+
+### Original Work Attribution
+
+This project is based on [omni-transaction-rs](https://github.com/near/omni-transaction-rs), originally created by NEAR Protocol and contributors.
+
+Copyright 2024 Proximity Labs Limited
+
+Licensed under the Apache License, Version 2.0

@@ -1,10 +1,9 @@
 //! # Omni Transaction
-//! `Omni-Transaction` is a library to construct transactions for different chains inside Near contracts and Rust clients.
+//! `Omni-Transaction` is a library to construct transactions for different chains in Rust clients.
 //!
 //! The library is designed to be modular and extensible, allowing you to add support for new chains easily.
 //!
 //! ### Supported chains:
-//! - NEAR
 //! - EVM chains (including Ethereum and L2s)
 //! - Bitcoin
 //!
@@ -18,33 +17,12 @@
 //!
 //! For a complete set of examples see the [examples](https://github.com/Omni-rs/examples.git) repository.
 //!
-//! ###### Building a NEAR transaction:
-//!
-//! ```rust
-//! let signer_id = "alice.near";
-//! let signer_public_key = "ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp";
-//! let nonce = U64(0);
-//! let receiver_id = "bob.near";
-//! let block_hash_str = "4reLvkAWfqk5fsqio1KLudk46cqRz9erQdaHkWZKMJDZ";
-//! let transfer_action = Action::Transfer(TransferAction { deposit: U128(1) });
-//! let actions = vec![transfer_action];
-//!
-//! let near_tx = TransactionBuilder::new::<NEAR>()
-//!     .signer_id(signer_id.to_string())
-//!     .signer_public_key(signer_public_key.to_public_key().unwrap())
-//!     .nonce(nonce)
-//!     .receiver_id(receiver_id.to_string())
-//!     .block_hash(block_hash_str.to_block_hash().unwrap())
-//!     .actions(actions)
-//!     .build();
-//!
-//! // Now you have access to build_for_signing that returns the encoded payload
-//! let near_tx_encoded = near_tx.build_for_signing();
-//! ```
-//!
 //! ###### Building an Ethereum transaction:
 //!
 //! ```rust
+//! use signet_rs::evm::utils::parse_eth_address;
+//! use signet_rs::{TransactionBuilder, TxBuilder, EVM};
+//! 
 //! let to_address_str = "d8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 //! let to_address = parse_eth_address(to_address_str);
 //! let max_gas_fee: u128 = 20_000_000_000;
@@ -73,6 +51,12 @@
 //! ###### Building a Bitcoin transaction:
 //!
 //! ```rust
+//! use signet_rs::bitcoin::types::{
+//!     Amount, Hash, LockTime, OutPoint, ScriptBuf, Sequence, TxIn, TxOut, Txid, Version, 
+//!     Witness, EcdsaSighashType
+//! };
+//! use signet_rs::{TransactionBuilder, TxBuilder, BITCOIN};
+//! 
 //! let txid_str = "2ece6cd71fee90ff613cee8f30a52c3ecc58685acf9b817b9c467b7ff199871c";
 //! let hash = Hash::from_hex(txid_str).unwrap();
 //! let txid = Txid(hash);
@@ -115,19 +99,18 @@
 //!
 //! - bitcoin
 //! - evm
-//! - near
 //!
 //! By default 'all' the features are enabled. However, you can customize the behaviour like this:
 //!
 //! ```toml
 //! [dependencies]
-//! omni-transaction = { version = "0.2.1", features = ["near"] }
+//! omni-transaction = { version = "0.2.1", features = ["evm"] }
 //! ```
 //! or
 //!
 //! ```toml
 //! [dependencies]
-//! omni-transaction = { version = "0.2.1", features = ["evm"] }
+//! omni-transaction = { version = "0.2.1", features = ["bitcoin"] }
 //! ```
 //!
 #[cfg(feature = "bitcoin")]
@@ -135,8 +118,6 @@ pub mod bitcoin;
 mod constants;
 #[cfg(feature = "evm")]
 pub mod evm;
-#[cfg(feature = "near")]
-pub mod near;
 pub mod signer;
 mod transaction_builder;
 mod transaction_builders;
@@ -148,6 +129,3 @@ pub use transaction_builders::BITCOIN;
 /// Alias for EVMTransactionBuilder
 #[cfg(feature = "evm")]
 pub use transaction_builders::EVM;
-/// Alias for NearTransactionBuilder
-#[cfg(feature = "near")]
-pub use transaction_builders::NEAR;

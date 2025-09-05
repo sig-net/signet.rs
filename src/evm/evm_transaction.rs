@@ -2,19 +2,25 @@
 use super::types::{AccessList, Address, Signature};
 use super::utils::parse_eth_address;
 use crate::constants::EIP_1559_TYPE;
-use near_sdk::serde::{Deserialize, Serialize};
 use rlp::RlpStream;
 use schemars::JsonSchema;
 use serde::de::{Error as DeError, Visitor};
 use serde::Deserializer;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 ///
 /// ###### Example:
 ///
 /// ```rust
+/// use signet_rs::evm::utils::parse_eth_address;
+/// use signet_rs::evm::EVMTransaction;
+/// 
+/// const MAX_FEE_PER_GAS: u128 = 20_000_000_000;
+/// const MAX_PRIORITY_FEE_PER_GAS: u128 = 1_000_000_000;
+/// const GAS_LIMIT: u128 = 21_000;
+/// 
 /// let nonce: u64 = 0;
-/// let to: Address = address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
 /// let value = 10000000000000000u128; // 0.01 ETH
 /// let data: Vec<u8> = vec![];
 /// let chain_id = 1;
@@ -35,7 +41,6 @@ use std::fmt;
 /// ```
 ///
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Clone)]
-#[serde(crate = "near_sdk::serde")]
 pub struct EVMTransaction {
     #[serde(deserialize_with = "deserialize_u64")]
     pub chain_id: u64,
@@ -121,8 +126,8 @@ impl EVMTransaction {
         }
     }
 
-    pub fn from_json(json: &str) -> Result<Self, near_sdk::serde_json::Error> {
-        let v: near_sdk::serde_json::Value = near_sdk::serde_json::from_str(json)?;
+    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
+        let v: serde_json::Value = serde_json::from_str(json)?;
 
         let to = v["to"].as_str().unwrap_or_default().to_string();
 
