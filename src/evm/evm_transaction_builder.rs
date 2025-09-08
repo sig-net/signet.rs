@@ -1,4 +1,3 @@
-//! Transaction builder for EVM transactions
 use crate::transaction_builder::TxBuilder;
 
 use super::{
@@ -53,6 +52,69 @@ impl EVMTransactionBuilder {
             max_priority_fee_per_gas: None,
             access_list: None,
         }
+    }
+
+    /// # Arguments
+    /// * `chain_id` - The chain ID for the transaction
+    /// * `nonce` - The transaction nonce
+    /// * `to` - Optional recipient address (None for contract creation)
+    /// * `value` - ETH value to send (in wei)
+    /// * `input` - Transaction input data
+    /// * `gas_limit` - Gas limit for the transaction
+    /// * `max_fee_per_gas` - Maximum fee per gas (EIP-1559)
+    /// * `max_priority_fee_per_gas` - Maximum priority fee per gas (EIP-1559)
+    /// * `access_list` - Optional access list for the transaction
+    /// 
+    /// # Returns
+    /// RLP encoded transaction bytes ready for signing
+    /// 
+    /// # Example
+    /// ```rust
+    /// use signet_rs::evm::EVMTransactionBuilder;
+    /// use signet_rs::evm::utils::parse_eth_address;
+    /// 
+    /// let rlp_encoded = EVMTransactionBuilder::build_and_encode(
+    ///     1,                    // chain_id
+    ///     0,                    // nonce
+    ///     Some(parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045")),
+    ///     10000000000000000,    // 0.01 ETH
+    ///     vec![],               // empty input
+    ///     21000,                // gas_limit
+    ///     20_000_000_000,       // max_fee_per_gas
+    ///     1_000_000_000,        // max_priority_fee_per_gas
+    ///     None,                 // no access list
+    /// );
+    /// ```
+    pub fn build_and_encode(
+        chain_id: u64,
+        nonce: u64,
+        to: Option<Address>,
+        value: u128,
+        input: Vec<u8>,
+        gas_limit: u128,
+        max_fee_per_gas: u128,
+        max_priority_fee_per_gas: u128,
+        access_list: Option<AccessList>,
+    ) -> Vec<u8> {
+        let mut builder = Self::new()
+            .chain_id(chain_id)
+            .nonce(nonce)
+            .value(value)
+            .input(input)
+            .gas_limit(gas_limit)
+            .max_fee_per_gas(max_fee_per_gas)
+            .max_priority_fee_per_gas(max_priority_fee_per_gas);
+        
+        if let Some(to_address) = to {
+            builder = builder.to(to_address);
+        }
+        
+        if let Some(list) = access_list {
+            builder = builder.access_list(list);
+        }
+        
+        let transaction = builder.build();
+        transaction.build_for_signing()
     }
 
     /// Chain ID of the transaction.
@@ -224,5 +286,47 @@ mod tests {
         rlp_encoded.encode_for_signing(&mut rlp_encoded_encoded_for_signing);
 
         assert!(rlp_encoded_encoded_for_signing == rlp_bytes);
+    }
+
+    #[test]
+    fn test_build_and_encode_convenience_function() {
+        let chain_id = 1;
+        let nonce = 0;
+        let to_address_str = "d8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
+        let to_address = parse_eth_address(to_address_str);
+        let value = 10000000000000000u128; // 0.01 ETH
+        let input = vec![0x01, 0x02, 0x03];
+        let gas_limit = GAS_LIMIT;
+        let max_fee_per_gas = MAX_FEE_PER_GAS;
+        let max_priority_fee_per_gas = MAX_PRIORITY_FEE_PER_GAS;
+        
+        // Build using convenience function
+        let rlp_from_convenience = EVMTransactionBuilder::build_and_encode(
+            chain_id,
+            nonce,
+            Some(to_address),
+            value,
+            input.clone(),
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            None,
+        );
+        
+        // Build using builder pattern
+        let rlp_from_builder = EVMTransactionBuilder::new()
+            .chain_id(chain_id)
+            .nonce(nonce)
+            .to(to_address)
+            .value(value)
+            .input(input)
+            .gas_limit(gas_limit)
+            .max_fee_per_gas(max_fee_per_gas)
+            .max_priority_fee_per_gas(max_priority_fee_per_gas)
+            .build()
+            .build_for_signing();
+        
+        // Both methods should produce identical output
+        assert_eq!(rlp_from_convenience, rlp_from_builder);
     }
 }
