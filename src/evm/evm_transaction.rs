@@ -3,17 +3,12 @@ use super::types::{AccessList, Address, Signature};
 use super::utils::parse_eth_address;
 use crate::constants::EIP_1559_TYPE;
 use rlp::RlpStream;
-#[cfg(feature = "std")]
-use schemars::JsonSchema;
 use serde::de::{Error as DeError, Visitor};
 use serde::Deserializer;
 use serde::{Deserialize, Serialize};
 use core::fmt;
 
-#[cfg(not(feature = "std"))]
 use alloc::{string::ToString, vec, vec::Vec};
-#[cfg(feature = "std")]
-use std::{string::ToString, vec, vec::Vec};
 
 ///
 /// ###### Example:
@@ -47,8 +42,6 @@ use std::{string::ToString, vec, vec::Vec};
 /// ```
 ///
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "std", derive(JsonSchema))]
-#[cfg_attr(feature = "std", schemars(rename_all = "camelCase"))]
 pub struct EVMTransaction {
     #[serde(deserialize_with = "deserialize_u64")]
     pub chain_id: u64,
@@ -286,7 +279,6 @@ where
         fn visit_str<E: DeError>(self, s: &str) -> Result<Self::Value, E> {
             s.parse::<u64>()
                 .map_err(|_| {
-                    #[cfg(not(feature = "std"))]
                     use alloc::format;
                     DeError::custom(format!("invalid u64 string: {}", s))
                 })
@@ -321,7 +313,6 @@ where
             value
                 .parse::<u128>()
                 .map_err(|_| {
-                    #[cfg(not(feature = "std"))]
                     use alloc::format;
                     DeError::custom(format!("invalid u128 string: {}", value))
                 })
@@ -333,6 +324,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use alloc::{vec, vec::Vec};
     use serde::{Deserialize, Serialize};
 
     #[derive(Deserialize, Serialize, Debug)]
@@ -638,12 +630,10 @@ mod tests {
     }"#;
 
         let result: Result<SignCallbackArgs, _> = serde_json::from_str(json);
-        if let Err(e) = &result {
-            println!("[TEST ERROR] Deserialization failed: {:?}", e);
-        }
         assert!(
             result.is_ok(),
-            "Expected deserialization to work with array of zeros"
+            "Expected deserialization to work with array of zeros: {:?}",
+            result.err()
         );
     }
 

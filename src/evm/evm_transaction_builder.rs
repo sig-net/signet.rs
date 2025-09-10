@@ -5,7 +5,6 @@ use super::{
     types::{AccessList, Address},
 };
 
-#[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
 pub struct EVMTransactionBuilder {
@@ -114,6 +113,7 @@ impl EVMTransactionBuilder {
 
 #[cfg(test)]
 mod tests {
+    use alloc::{vec, vec::Vec};
     use alloy::{
         consensus::SignableTransaction,
         network::TransactionBuilder,

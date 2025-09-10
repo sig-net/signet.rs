@@ -1,6 +1,4 @@
 use serde::{Deserialize, Serialize};
-
-#[cfg(not(feature = "std"))]
 use alloc::string::String;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

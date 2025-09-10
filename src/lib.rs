@@ -113,9 +113,8 @@
 //! omni-transaction = { version = "0.2.1", features = ["bitcoin"] }
 //! ```
 
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 
-#[cfg(not(feature = "std"))]
 extern crate alloc;
 
 #[cfg(feature = "bitcoin")]
