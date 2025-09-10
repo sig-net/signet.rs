@@ -30,7 +30,7 @@ std = [
     "borsh?/std",
     "bs58?/std"
 ]
-all = ["bitcoin", "evm"]
+all = ["evm"]  # Bitcoin disabled by default
 bitcoin = ["sha2", "borsh", "serde-big-array", "bs58"]
 evm = []
 
