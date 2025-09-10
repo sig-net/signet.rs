@@ -7,7 +7,7 @@ use schemars::JsonSchema;
 use serde::de::{Error as DeError, Visitor};
 use serde::Deserializer;
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use core::fmt;
 
 ///
 /// ###### Example:
@@ -181,14 +181,14 @@ impl EVMTransaction {
     }
 }
 
-fn parse_u64(value: &str) -> Result<u64, std::num::ParseIntError> {
+fn parse_u64(value: &str) -> Result<u64, core::num::ParseIntError> {
     value.strip_prefix("0x").map_or_else(
         || value.parse::<u64>(),
         |hex_str| u64::from_str_radix(hex_str, 16),
     )
 }
 
-fn parse_u128(value: &str) -> Result<u128, std::num::ParseIntError> {
+fn parse_u128(value: &str) -> Result<u128, core::num::ParseIntError> {
     value.strip_prefix("0x").map_or_else(
         || value.parse::<u128>(),
         |hex_str| u128::from_str_radix(hex_str, 16),
