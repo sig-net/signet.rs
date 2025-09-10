@@ -5,6 +5,9 @@ use super::{
     types::{AccessList, Address},
 };
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 pub struct EVMTransactionBuilder {
     chain_id: Option<u64>,
     nonce: Option<u64>,
