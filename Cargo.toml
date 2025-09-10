@@ -1,11 +1,11 @@
 [package]
 name = "signet-rs"
-version = "0.2.4"
+version = "0.2.5"
 authors = ["Sig Network", "Proximity Labs Limited"]
 license = "Apache-2.0"
 edition = "2021"
 repository = "https://github.com/sig-net/signet.rs"
-description = "Transaction builder for all chains in Rust - Fork of omni-transaction-rs"
+description = "Transaction builder for all chains in Rust"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

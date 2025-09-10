@@ -1,7 +1,5 @@
 # Signet.rs
 
-> **Note**: This is a fork of [near/omni-transaction-rs](https://github.com/near/omni-transaction-rs), originally developed by NEAR Protocol.
-
 A Rust library for constructing and signing transactions across multiple blockchain networks.
 
 ## Supported Chains
