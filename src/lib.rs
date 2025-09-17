@@ -112,7 +112,11 @@
 //! [dependencies]
 //! omni-transaction = { version = "0.2.1", features = ["bitcoin"] }
 //! ```
-//!
+
+#![no_std]
+
+extern crate alloc;
+
 #[cfg(feature = "bitcoin")]
 pub mod bitcoin;
 mod constants;

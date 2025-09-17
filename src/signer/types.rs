@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use alloc::string::String;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SignatureResponse {

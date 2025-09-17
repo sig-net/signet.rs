@@ -3,11 +3,12 @@ use super::types::{AccessList, Address, Signature};
 use super::utils::parse_eth_address;
 use crate::constants::EIP_1559_TYPE;
 use rlp::RlpStream;
-use schemars::JsonSchema;
 use serde::de::{Error as DeError, Visitor};
 use serde::Deserializer;
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use core::fmt;
+
+use alloc::{string::ToString, vec, vec::Vec};
 
 ///
 /// ###### Example:
@@ -40,7 +41,7 @@ use std::fmt;
 /// };
 /// ```
 ///
-#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EVMTransaction {
     #[serde(deserialize_with = "deserialize_u64")]
     pub chain_id: u64,
@@ -181,14 +182,14 @@ impl EVMTransaction {
     }
 }
 
-fn parse_u64(value: &str) -> Result<u64, std::num::ParseIntError> {
+fn parse_u64(value: &str) -> Result<u64, core::num::ParseIntError> {
     value.strip_prefix("0x").map_or_else(
         || value.parse::<u64>(),
         |hex_str| u64::from_str_radix(hex_str, 16),
     )
 }
 
-fn parse_u128(value: &str) -> Result<u128, std::num::ParseIntError> {
+fn parse_u128(value: &str) -> Result<u128, core::num::ParseIntError> {
     value.strip_prefix("0x").map_or_else(
         || value.parse::<u128>(),
         |hex_str| u128::from_str_radix(hex_str, 16),
@@ -277,7 +278,10 @@ where
 
         fn visit_str<E: DeError>(self, s: &str) -> Result<Self::Value, E> {
             s.parse::<u64>()
-                .map_err(|_| DeError::custom(format!("invalid u64 string: {}", s)))
+                .map_err(|_| {
+                    use alloc::format;
+                    DeError::custom(format!("invalid u64 string: {}", s))
+                })
         }
     }
 
@@ -308,7 +312,10 @@ where
         fn visit_str<E: DeError>(self, value: &str) -> Result<Self::Value, E> {
             value
                 .parse::<u128>()
-                .map_err(|_| DeError::custom(format!("invalid u128 string: {}", value)))
+                .map_err(|_| {
+                    use alloc::format;
+                    DeError::custom(format!("invalid u128 string: {}", value))
+                })
         }
     }
 
@@ -317,6 +324,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use alloc::{vec, vec::Vec};
     use serde::{Deserialize, Serialize};
 
     #[derive(Deserialize, Serialize, Debug)]
@@ -622,12 +630,10 @@ mod tests {
     }"#;
 
         let result: Result<SignCallbackArgs, _> = serde_json::from_str(json);
-        if let Err(e) = &result {
-            println!("[TEST ERROR] Deserialization failed: {:?}", e);
-        }
         assert!(
             result.is_ok(),
-            "Expected deserialization to work with array of zeros"
+            "Expected deserialization to work with array of zeros: {:?}",
+            result.err()
         );
     }
 

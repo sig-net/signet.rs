@@ -1,10 +1,11 @@
-//! Transaction builder for EVM transactions
 use crate::transaction_builder::TxBuilder;
 
 use super::{
     evm_transaction::EVMTransaction,
     types::{AccessList, Address},
 };
+
+use alloc::vec::Vec;
 
 pub struct EVMTransactionBuilder {
     chain_id: Option<u64>,
@@ -112,6 +113,7 @@ impl EVMTransactionBuilder {
 
 #[cfg(test)]
 mod tests {
+    use alloc::{vec, vec::Vec};
     use alloy::{
         consensus::SignableTransaction,
         network::TransactionBuilder,

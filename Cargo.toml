@@ -1,14 +1,14 @@
 [package]
 name = "signet-rs"
-version = "0.2.4"
+version = "0.2.5"
 authors = ["Sig Network", "Proximity Labs Limited"]
 license = "Apache-2.0"
 edition = "2021"
 repository = "https://github.com/sig-net/signet.rs"
-description = "Transaction builder for all chains in Rust - Fork of omni-transaction-rs"
+description = "Transaction builder for all chains in Rust"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]  # Only rlib for Substrate integration
 
 [profile.release]
 codegen-units = 1
@@ -20,21 +20,19 @@ panic = "abort"
 overflow-checks = true
 
 [features]
-default = ["all"]
-all = ["bitcoin", "evm"]
-bitcoin = ["sha2"]
+default = ["evm"]  # Bitcoin disabled - requires std::io for encoding
+bitcoin = ["sha2", "borsh", "serde-big-array", "bs58"]  # Optional, not included by default
 evm = []
 
 [dependencies]
-rlp = "0.6.1"
-hex = "0.4.3"
-borsh = { version = "1.0.0", features = ["derive"] }
-serde-big-array = "0.5.1"
-bs58 = "0.5.1"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-schemars = { version = "0.8" }
-sha2 = { version = "0.10.8", optional = true }
+rlp = { version = "0.6.1", default-features = false }
+hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
+borsh = { version = "1.0.0", default-features = false, features = ["derive"], optional = true }
+serde-big-array = { version = "0.5.1", default-features = false, optional = true }
+bs58 = { version = "0.5.1", default-features = false, features = ["alloc"], optional = true }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+sha2 = { version = "0.10.8", default-features = false, optional = true }
 
 
 [dev-dependencies]
