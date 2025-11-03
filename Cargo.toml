@@ -1,0 +1,68 @@
+[package]
+name = "signet-rs"
+version = "0.2.5"
+authors = ["Sig Network", "Proximity Labs Limited"]
+license = "Apache-2.0"
+edition = "2021"
+repository = "https://github.com/sig-net/signet.rs"
+description = "Transaction builder for all chains in Rust"
+
+[lib]
+crate-type = ["rlib"]  # Only rlib for Substrate integration
+
+[profile.release]
+codegen-units = 1
+# Tell `rustc` to optimize for small code size.
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true
+
+[features]
+default = ["evm", "bitcoin"]  # Both EVM and Bitcoin enabled by default (no_std compatible!)
+bitcoin = ["sha2", "borsh", "serde-big-array", "bs58"]
+evm = []
+std = ["schemars"]  # JsonSchema requires std
+
+[dependencies]
+rlp = { version = "0.6.1", default-features = false }
+hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
+borsh = { version = "1.0.0", default-features = false, features = ["derive"], optional = true }
+serde-big-array = { version = "0.5.1", default-features = false, optional = true }
+bs58 = { version = "0.5.1", default-features = false, features = ["alloc"], optional = true }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+sha2 = { version = "0.10.8", default-features = false, optional = true }
+schemars = { version = "0.8", default-features = false, features = ["derive"], optional = true }
+
+
+[dev-dependencies]
+# ethereum
+alloy = { version = "0.3.3", features = ["full", "node-bindings", "rlp"] }
+alloy-rlp = { version = "0.3.8", features = ["derive"] }
+alloy-primitives = { version = "0.8.3" }
+
+# bitcoin
+bitcoin = { version = "0.32.0", default-features = false, features = [
+    "std",
+    "serde",
+    "rand-std",
+    "rand",
+    "secp-lowmemory",
+    "secp-recovery",
+] }
+k256 = { version = "0.13.1", features = [
+    "sha256",
+    "ecdsa",
+    "serde",
+    "arithmetic",
+    "expose-field",
+] }
+
+# async
+tokio = { version = "1.38", features = ["full"] }
+
+# misc
+eyre = "0.6"
+
