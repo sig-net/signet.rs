@@ -17,7 +17,9 @@ pub struct Psbt {
 }
 
 /// PSBT input metadata.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize, Default)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize, Default,
+)]
 pub struct Input {
     pub non_witness_utxo: Option<BitcoinTransaction>,
     pub witness_utxo: Option<Vec<u8>>,
@@ -33,7 +35,9 @@ pub struct Input {
 }
 
 /// PSBT output metadata.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize, Default)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize, Default,
+)]
 pub struct Output {
     pub redeem_script: Option<Vec<u8>>,
     pub witness_script: Option<Vec<u8>>,

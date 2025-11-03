@@ -110,16 +110,11 @@ impl Psbt {
 
     fn serialize_global(&self, buf: &mut Vec<u8>) -> Result<(), PsbtSerializeError> {
         // Serialize unsigned transaction
-        serialize_key_value(
-            buf,
-            PSBT_GLOBAL_UNSIGNED_TX,
-            &[],
-            &{
-                let mut tx_buf = Vec::new();
-                self.unsigned_tx.encode(&mut tx_buf)?;
-                tx_buf
-            },
-        )?;
+        serialize_key_value(buf, PSBT_GLOBAL_UNSIGNED_TX, &[], &{
+            let mut tx_buf = Vec::new();
+            self.unsigned_tx.encode(&mut tx_buf)?;
+            tx_buf
+        })?;
 
         // Serialize xpubs (sorted by key for canonical ordering)
         {
@@ -382,11 +377,14 @@ mod tests {
         use bitcoin::absolute::LockTime as RustBitcoinLockTime;
         use bitcoin::psbt::Psbt as RustBitcoinPsbt;
         use bitcoin::transaction::{
-            OutPoint as RustBitcoinOutPoint, TxIn as RustBitcoinTxIn,
-            TxOut as RustBitcoinTxOut, Version as RustBitcoinVersion,
+            OutPoint as RustBitcoinOutPoint, TxIn as RustBitcoinTxIn, TxOut as RustBitcoinTxOut,
+            Version as RustBitcoinVersion,
         };
         use bitcoin::Transaction as RustBitcoinTransaction;
-        use bitcoin::{Amount as RustBitcoinAmount, ScriptBuf as RustBitcoinScriptBuf, Witness as RustBitcoinWitness};
+        use bitcoin::{
+            Amount as RustBitcoinAmount, ScriptBuf as RustBitcoinScriptBuf,
+            Witness as RustBitcoinWitness,
+        };
 
         // Create rust-bitcoin transaction
         let rb_tx = RustBitcoinTransaction {
@@ -439,11 +437,14 @@ mod tests {
         use bitcoin::absolute::LockTime as RustBitcoinLockTime;
         use bitcoin::psbt::Psbt as RustBitcoinPsbt;
         use bitcoin::transaction::{
-            OutPoint as RustBitcoinOutPoint, TxIn as RustBitcoinTxIn,
-            TxOut as RustBitcoinTxOut, Version as RustBitcoinVersion,
+            OutPoint as RustBitcoinOutPoint, TxIn as RustBitcoinTxIn, TxOut as RustBitcoinTxOut,
+            Version as RustBitcoinVersion,
         };
         use bitcoin::Transaction as RustBitcoinTransaction;
-        use bitcoin::{Amount as RustBitcoinAmount, ScriptBuf as RustBitcoinScriptBuf, Witness as RustBitcoinWitness};
+        use bitcoin::{
+            Amount as RustBitcoinAmount, ScriptBuf as RustBitcoinScriptBuf,
+            Witness as RustBitcoinWitness,
+        };
 
         // Create rust-bitcoin transaction with 2 outputs
         let rb_tx = RustBitcoinTransaction {
@@ -502,17 +503,21 @@ mod tests {
     #[test]
     fn test_psbt_compare_to_rust_bitcoin_with_scripts() {
         use bitcoin::absolute::LockTime as RustBitcoinLockTime;
+        use bitcoin::hashes::Hash as _;
         use bitcoin::psbt::Psbt as RustBitcoinPsbt;
         use bitcoin::transaction::{
-            OutPoint as RustBitcoinOutPoint, TxIn as RustBitcoinTxIn,
-            TxOut as RustBitcoinTxOut, Version as RustBitcoinVersion,
+            OutPoint as RustBitcoinOutPoint, TxIn as RustBitcoinTxIn, TxOut as RustBitcoinTxOut,
+            Version as RustBitcoinVersion,
         };
         use bitcoin::Transaction as RustBitcoinTransaction;
-        use bitcoin::{Amount as RustBitcoinAmount, ScriptBuf as RustBitcoinScriptBuf, Witness as RustBitcoinWitness};
-        use bitcoin::hashes::Hash as _;
+        use bitcoin::{
+            Amount as RustBitcoinAmount, ScriptBuf as RustBitcoinScriptBuf,
+            Witness as RustBitcoinWitness,
+        };
 
         // P2PKH script: OP_DUP OP_HASH160 <pubkey_hash> OP_EQUALVERIFY OP_CHECKSIG
-        let script_bytes = hex::decode("76a914cb8a3018cf279311b148cb8d13728bd8cbe95bda88ac").unwrap();
+        let script_bytes =
+            hex::decode("76a914cb8a3018cf279311b148cb8d13728bd8cbe95bda88ac").unwrap();
 
         // Create rust-bitcoin transaction with real script
         let rb_tx = RustBitcoinTransaction {
@@ -540,10 +545,7 @@ mod tests {
         let our_tx = TransactionBuilder::new::<BITCOIN>()
             .version(Version::Two)
             .inputs(vec![TxIn {
-                previous_output: OutPoint::new(
-                    Txid(Hash([0x42; 32])),
-                    1,
-                ),
+                previous_output: OutPoint::new(Txid(Hash([0x42; 32])), 1),
                 script_sig: ScriptBuf::default(),
                 sequence: Sequence(0xfffffffe),
                 witness: Witness::default(),
@@ -567,13 +569,17 @@ mod tests {
         use bitcoin::absolute::LockTime as RustBitcoinLockTime;
         use bitcoin::psbt::Psbt as RustBitcoinPsbt;
         use bitcoin::transaction::{
-            OutPoint as RustBitcoinOutPoint, TxIn as RustBitcoinTxIn,
-            TxOut as RustBitcoinTxOut, Version as RustBitcoinVersion,
+            OutPoint as RustBitcoinOutPoint, TxIn as RustBitcoinTxIn, TxOut as RustBitcoinTxOut,
+            Version as RustBitcoinVersion,
         };
         use bitcoin::Transaction as RustBitcoinTransaction;
-        use bitcoin::{Amount as RustBitcoinAmount, ScriptBuf as RustBitcoinScriptBuf, Witness as RustBitcoinWitness};
+        use bitcoin::{
+            Amount as RustBitcoinAmount, ScriptBuf as RustBitcoinScriptBuf,
+            Witness as RustBitcoinWitness,
+        };
 
-        let script_bytes = hex::decode("76a914cb8a3018cf279311b148cb8d13728bd8cbe95bda88ac").unwrap();
+        let script_bytes =
+            hex::decode("76a914cb8a3018cf279311b148cb8d13728bd8cbe95bda88ac").unwrap();
 
         let rb_tx = RustBitcoinTransaction {
             version: RustBitcoinVersion::TWO,
@@ -617,7 +623,9 @@ mod tests {
 
         let mut our_psbt = our_tx.to_psbt();
 
-        our_psbt.update_input_with_witness_utxo(0, script_bytes, 500_000_000).unwrap();
+        our_psbt
+            .update_input_with_witness_utxo(0, script_bytes, 500_000_000)
+            .unwrap();
         our_psbt.update_input_with_sighash_type(0, 1).unwrap();
 
         let our_serialized = our_psbt.serialize().unwrap();
@@ -631,11 +639,14 @@ mod tests {
         use bitcoin::absolute::LockTime as RustBitcoinLockTime;
         use bitcoin::psbt::Psbt as RustBitcoinPsbt;
         use bitcoin::transaction::{
-            OutPoint as RustBitcoinOutPoint, TxIn as RustBitcoinTxIn,
-            TxOut as RustBitcoinTxOut, Version as RustBitcoinVersion,
+            OutPoint as RustBitcoinOutPoint, TxIn as RustBitcoinTxIn, TxOut as RustBitcoinTxOut,
+            Version as RustBitcoinVersion,
         };
         use bitcoin::Transaction as RustBitcoinTransaction;
-        use bitcoin::{Amount as RustBitcoinAmount, ScriptBuf as RustBitcoinScriptBuf, Witness as RustBitcoinWitness};
+        use bitcoin::{
+            Amount as RustBitcoinAmount, ScriptBuf as RustBitcoinScriptBuf,
+            Witness as RustBitcoinWitness,
+        };
 
         // Create rust-bitcoin transaction with 2 inputs
         let rb_tx = RustBitcoinTransaction {

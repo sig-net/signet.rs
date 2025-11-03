@@ -1,6 +1,6 @@
 //! Types used by the EVM transaction builder.
-use serde::{Deserialize, Serialize};
 use alloc::vec::Vec;
+use serde::{Deserialize, Serialize};
 
 pub type Address = [u8; 20];
 

@@ -13,7 +13,7 @@ use super::{
         Decodable, Encodable, ToU64,
     },
     types::{
-        EcdsaSighashType, Hash, LockTime, ScriptBuf, TransactionType, Txid, TxIn, TxOut, Version,
+        EcdsaSighashType, Hash, LockTime, ScriptBuf, TransactionType, TxIn, TxOut, Txid, Version,
         Witness,
     },
 };
@@ -109,7 +109,10 @@ impl BitcoinTransaction {
         buffer
     }
 
-    fn encode_without_witness<W: Write + ?Sized>(&self, w: &mut W) -> Result<usize, super::encoding::io::Error> {
+    fn encode_without_witness<W: Write + ?Sized>(
+        &self,
+        w: &mut W,
+    ) -> Result<usize, super::encoding::io::Error> {
         let mut len = 0;
         len += self.version.encode(w)?;
         len += self.input.encode(w)?;
@@ -124,7 +127,9 @@ impl BitcoinTransaction {
             .expect("txid encoding should never fail");
 
         let hash = sha256d(&buffer);
-        Txid(Hash(hash.try_into().expect("sha256d always returns 32 bytes")))
+        Txid(Hash(
+            hash.try_into().expect("sha256d always returns 32 bytes"),
+        ))
     }
 
     pub fn to_psbt(&self) -> crate::bitcoin::psbt::Psbt {
@@ -837,7 +842,8 @@ mod tests {
 
     #[test]
     fn test_txid_segwit_transaction() {
-        let script_bytes = hex::decode("76a914cb8a3018cf279311b148cb8d13728bd8cbe95bda88ac").unwrap();
+        let script_bytes =
+            hex::decode("76a914cb8a3018cf279311b148cb8d13728bd8cbe95bda88ac").unwrap();
 
         let rb_tx = RustBitcoinTransaction {
             version: RustBitcoinVersion::TWO,

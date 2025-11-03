@@ -2,11 +2,11 @@
 use super::types::{AccessList, Address, Signature};
 use super::utils::parse_eth_address;
 use crate::constants::EIP_1559_TYPE;
+use core::fmt;
 use rlp::RlpStream;
 use serde::de::{Error as DeError, Visitor};
 use serde::Deserializer;
 use serde::{Deserialize, Serialize};
-use core::fmt;
 
 use alloc::{string::ToString, vec, vec::Vec};
 
@@ -16,11 +16,11 @@ use alloc::{string::ToString, vec, vec::Vec};
 /// ```rust
 /// use signet_rs::evm::utils::parse_eth_address;
 /// use signet_rs::evm::EVMTransaction;
-/// 
+///
 /// const MAX_FEE_PER_GAS: u128 = 20_000_000_000;
 /// const MAX_PRIORITY_FEE_PER_GAS: u128 = 1_000_000_000;
 /// const GAS_LIMIT: u128 = 21_000;
-/// 
+///
 /// let nonce: u64 = 0;
 /// let value = 10000000000000000u128; // 0.01 ETH
 /// let data: Vec<u8> = vec![];
@@ -277,11 +277,10 @@ where
         }
 
         fn visit_str<E: DeError>(self, s: &str) -> Result<Self::Value, E> {
-            s.parse::<u64>()
-                .map_err(|_| {
-                    use alloc::format;
-                    DeError::custom(format!("invalid u64 string: {}", s))
-                })
+            s.parse::<u64>().map_err(|_| {
+                use alloc::format;
+                DeError::custom(format!("invalid u64 string: {}", s))
+            })
         }
     }
 
@@ -310,12 +309,10 @@ where
         }
 
         fn visit_str<E: DeError>(self, value: &str) -> Result<Self::Value, E> {
-            value
-                .parse::<u128>()
-                .map_err(|_| {
-                    use alloc::format;
-                    DeError::custom(format!("invalid u128 string: {}", value))
-                })
+            value.parse::<u128>().map_err(|_| {
+                use alloc::format;
+                DeError::custom(format!("invalid u128 string: {}", value))
+            })
         }
     }
 

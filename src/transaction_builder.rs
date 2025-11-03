@@ -20,9 +20,9 @@ impl TransactionBuilder {
 
 #[cfg(test)]
 mod tests {
-    use alloc::{vec, vec::Vec};
     use super::{TransactionBuilder as OmniTransactionBuilder, TxBuilder};
     use crate::{evm::utils::parse_eth_address, transaction_builders::EVM};
+    use alloc::{vec, vec::Vec};
     use alloy::{
         consensus::SignableTransaction,
         network::TransactionBuilder,

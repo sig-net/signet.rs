@@ -69,7 +69,7 @@ impl Decodable for TxIn {
 
 #[cfg(test)]
 mod tests {
-    use super::{TxIn, OutPoint, Sequence, Witness};
+    use super::{OutPoint, Sequence, TxIn, Witness};
     use crate::bitcoin::encoding::{Decodable, Encodable};
     use crate::bitcoin::types::script_buf::ScriptBuf;
     use alloc::vec::Vec;
