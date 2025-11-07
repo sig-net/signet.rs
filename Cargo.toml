@@ -1,10 +1,12 @@
 [package]
 name = "signet-rs"
-version = "0.2.5"
+version = "0.0.2"
 authors = ["Sig Network", "Proximity Labs Limited"]
 license = "Apache-2.0"
 edition = "2021"
 repository = "https://github.com/sig-net/signet.rs"
+documentation = "https://docs.rs/signet-rs"
+readme = "README.md"
 description = "Transaction builder for all chains in Rust"
 
 [lib]
@@ -65,4 +67,3 @@ tokio = { version = "1.38", features = ["full"] }
 
 # misc
 eyre = "0.6"
-

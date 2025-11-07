@@ -1,15 +1,18 @@
 //! High level transaction builder that can be used to build transactions for different chains.
 
-/// Transaction trait builder for different chains.
+/// Trait implemented by chain-specific builders to produce a concrete transaction payload.
+/// Implementations usually hold a set of optional fields that are validated right before `build`.
 pub trait TxBuilder<T> {
+    /// Validates the accumulated state and returns the finalized transaction.
     fn build(&self) -> T;
 }
 
-/// High level structure to build transactions for different chains.
+/// Type-erased entry point that hands back the requested chain builder.
 pub struct TransactionBuilder;
 
 impl TransactionBuilder {
     #[allow(clippy::new_ret_no_self)]
+    /// Materializes the default builder for the requested chain so callers can begin configuring it.
     pub fn new<T>() -> T
     where
         T: Default,
