@@ -41,6 +41,7 @@ use alloc::{string::ToString, vec, vec::Vec};
 /// };
 /// ```
 ///
+/// Signing-ready EIP-1559 transaction produced by the builder or JSON parser.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EVMTransaction {
     #[serde(deserialize_with = "deserialize_u64")]
@@ -62,6 +63,7 @@ pub struct EVMTransaction {
 }
 
 impl EVMTransaction {
+    /// RLP-encode the EIP-1559 payload prefixed with transaction type (0x02) for signing.
     pub fn build_for_signing(&self) -> Vec<u8> {
         let mut rlp_stream = RlpStream::new();
 
@@ -76,6 +78,7 @@ impl EVMTransaction {
         rlp_stream.out().to_vec()
     }
 
+    /// RLP-encode the transaction including `v`, `r`, `s` to broadcast to an RPC node.
     pub fn build_with_signature(&self, signature: &Signature) -> Vec<u8> {
         let mut rlp_stream = RlpStream::new();
 
@@ -127,6 +130,7 @@ impl EVMTransaction {
         }
     }
 
+    /// Build an [`EVMTransaction`] from RPC-style JSON (hex strings for numeric fields).
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         let v: serde_json::Value = serde_json::from_str(json)?;
 
