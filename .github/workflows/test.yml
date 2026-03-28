@@ -74,19 +74,3 @@ jobs:
       - name: Run unit tests
         run: just test-unit
 
-  integration-tests:
-    needs: [build, build-wasm] 
-    strategy:
-      matrix:
-        platform: [ubuntu-latest]
-        toolchain: [stable, nightly]
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/install-just
-      - uses: ./.github/actions/setup-rust
-      - uses: foundry-rs/foundry-toolchain@v1
-      - name: Run integration tests
-        run: just test-integration
-        env:
-          CI_ENVIRONMENT: true

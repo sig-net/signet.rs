@@ -137,33 +137,44 @@ impl EVMTransaction {
             _ => None,
         };
 
-        let nonce_str = v["nonce"].as_str().expect("nonce should be provided");
-        let nonce = parse_u64(nonce_str).expect("nonce should be a valid u64");
+        let err = |msg: &str| serde_json::Error::custom(alloc::string::String::from(msg));
 
-        let value_str = v["value"].as_str().expect("value should be provided");
-        let value = parse_u128(value_str).expect("value should be a valid u128");
+        let nonce_str = v["nonce"]
+            .as_str()
+            .ok_or_else(|| err("nonce should be provided"))?;
+        let nonce = parse_u64(nonce_str).map_err(|_| err("nonce should be a valid u64"))?;
 
-        let gas_limit_str = v["gasLimit"].as_str().expect("gasLimit should be provided");
-        let gas_limit = parse_u128(gas_limit_str).expect("gasLimit should be a valid u128");
+        let value_str = v["value"]
+            .as_str()
+            .ok_or_else(|| err("value should be provided"))?;
+        let value = parse_u128(value_str).map_err(|_| err("value should be a valid u128"))?;
+
+        let gas_limit_str = v["gasLimit"]
+            .as_str()
+            .ok_or_else(|| err("gasLimit should be provided"))?;
+        let gas_limit =
+            parse_u128(gas_limit_str).map_err(|_| err("gasLimit should be a valid u128"))?;
 
         let max_priority_fee_per_gas_str = v["maxPriorityFeePerGas"]
             .as_str()
-            .expect("maxPriorityFeePerGas should be provided");
+            .ok_or_else(|| err("maxPriorityFeePerGas should be provided"))?;
         let max_priority_fee_per_gas = parse_u128(max_priority_fee_per_gas_str)
-            .expect("maxPriorityFeePerGas should be a valid u128");
+            .map_err(|_| err("maxPriorityFeePerGas should be a valid u128"))?;
 
         let max_fee_per_gas_str = v["maxFeePerGas"]
             .as_str()
-            .expect("maxFeePerGas should be provided");
-        let max_fee_per_gas =
-            parse_u128(max_fee_per_gas_str).expect("maxFeePerGas should be a valid u128");
+            .ok_or_else(|| err("maxFeePerGas should be provided"))?;
+        let max_fee_per_gas = parse_u128(max_fee_per_gas_str)
+            .map_err(|_| err("maxFeePerGas should be a valid u128"))?;
 
-        let chain_id_str = v["chainId"].as_str().expect("chainId should be provided");
-        let chain_id = parse_u64(chain_id_str).expect("chainId should be a valid u64");
+        let chain_id_str = v["chainId"]
+            .as_str()
+            .ok_or_else(|| err("chainId should be provided"))?;
+        let chain_id = parse_u64(chain_id_str).map_err(|_| err("chainId should be a valid u64"))?;
 
         let input = v["input"].as_str().unwrap_or_default().to_string();
-        let input =
-            hex::decode(input.strip_prefix("0x").unwrap_or("")).expect("input should be hex");
+        let input = hex::decode(input.strip_prefix("0x").unwrap_or(""))
+            .map_err(|_| err("input should be valid hex"))?;
 
         let access_list = v["accessList"]
             .as_array()
@@ -250,6 +261,12 @@ where
                 let n = v
                     .as_u64()
                     .ok_or_else(|| DeError::invalid_type(Unexpected::Other("not a u64"), &"u8"))?;
+                if n > 255 {
+                    return Err(DeError::invalid_value(
+                        Unexpected::Unsigned(n),
+                        &"a value in 0..=255",
+                    ));
+                }
                 out[i] = n as u8;
             }
             return Ok(Some(out));
@@ -304,10 +321,13 @@ where
         }
 
         fn visit_str<E: DeError>(self, s: &str) -> Result<Self::Value, E> {
-            s.parse::<u64>().map_err(|_| {
-                use alloc::format;
-                DeError::custom(format!("invalid u64 string: {}", s))
-            })
+            s.strip_prefix("0x")
+                .map(|hex| u64::from_str_radix(hex, 16))
+                .unwrap_or_else(|| s.parse::<u64>())
+                .map_err(|_| {
+                    use alloc::format;
+                    DeError::custom(format!("invalid u64 string: {}", s))
+                })
         }
     }
 
@@ -336,10 +356,14 @@ where
         }
 
         fn visit_str<E: DeError>(self, value: &str) -> Result<Self::Value, E> {
-            value.parse::<u128>().map_err(|_| {
-                use alloc::format;
-                DeError::custom(format!("invalid u128 string: {}", value))
-            })
+            value
+                .strip_prefix("0x")
+                .map(|hex| u128::from_str_radix(hex, 16))
+                .unwrap_or_else(|| value.parse::<u128>())
+                .map_err(|_| {
+                    use alloc::format;
+                    DeError::custom(format!("invalid u128 string: {}", value))
+                })
         }
     }
 
