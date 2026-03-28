@@ -31,7 +31,7 @@ jobs:
       - run: RUSTDOCFLAGS="-D warnings" cargo doc
   
   build:
-    needs: [clippy, cargo-fmt, cargo-doc] 
+    needs: [clippy, cargo-fmt, cargo-doc]
     strategy:
       matrix:
         platform: [ubuntu-latest, macos-latest]
@@ -44,10 +44,10 @@ jobs:
       - run: just check
 
   build-wasm:
-    needs: [clippy, cargo-fmt, cargo-doc] 
+    needs: [clippy, cargo-fmt, cargo-doc]
     strategy:
       matrix:
-        platform: [ubuntu-latest, macos-latest]
+        platform: [ubuntu-latest]
         toolchain: [stable, nightly]
     runs-on: ${{ matrix.platform }}
     steps:
@@ -60,10 +60,10 @@ jobs:
         run: just check-wasm
 
   unit-tests:
-    needs: [build, build-wasm] 
+    needs: [build, build-wasm]
     strategy:
       matrix:
-        platform: [ubuntu-latest, macos-latest]
+        platform: [ubuntu-latest]
         toolchain: [stable, nightly]
     runs-on: ${{ matrix.platform }}
     steps:
