@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use alloc::{string::ToString, vec, vec::Vec};
 
+/// An EIP-1559 (type-2) transaction ready for RLP encoding and signing.
 ///
 /// ###### Example:
 ///
@@ -62,6 +63,9 @@ pub struct EVMTransaction {
 }
 
 impl EVMTransaction {
+    /// RLP-encode the unsigned EIP-1559 payload (`0x02 || RLP(fields)`) for signing.
+    ///
+    /// The caller should Keccak256-hash the result before passing it to the signer.
     pub fn build_for_signing(&self) -> Vec<u8> {
         let mut rlp_stream = RlpStream::new();
 
@@ -76,6 +80,9 @@ impl EVMTransaction {
         rlp_stream.out().to_vec()
     }
 
+    /// RLP-encode the signed transaction (`0x02 || RLP(fields, v, r, s)`) for broadcast.
+    ///
+    /// The resulting bytes can be sent directly to an Ethereum JSON-RPC `eth_sendRawTransaction` endpoint.
     pub fn build_with_signature(&self, signature: &Signature) -> Vec<u8> {
         let mut rlp_stream = RlpStream::new();
 
@@ -127,6 +134,15 @@ impl EVMTransaction {
         }
     }
 
+    /// Parse an Ethereum JSON-RPC style transaction object.
+    ///
+    /// Accepts hex-prefixed (`0x...`) and decimal string values for numeric fields.
+    /// Set `to` to `"0x"` or omit it for contract creation. The `accessList` field
+    /// is parsed if present.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if required fields are missing or contain invalid values.
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         let v: serde_json::Value = serde_json::from_str(json)?;
 

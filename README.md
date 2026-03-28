@@ -76,11 +76,13 @@ let txin: TxIn = TxIn {
     witness: Witness::default(),
 };
 
-let sender_script_pubkey_hex = "76a914cb8a3018cf279311b148cb8d13728bd8cbe95bda88ac";
-let sender_script_pubkey = ScriptBuf(sender_script_pubkey_hex.as_bytes().to_vec());
+let sender_script_pubkey = ScriptBuf::from_hex(
+    "76a914cb8a3018cf279311b148cb8d13728bd8cbe95bda88ac"
+).unwrap();
 
-let receiver_script_pubkey_hex = "76a914406cf8a18b97a230d15ed82f0d251560a05bda0688ac";
-let receiver_script_pubkey = ScriptBuf(receiver_script_pubkey_hex.as_bytes().to_vec());
+let receiver_script_pubkey = ScriptBuf::from_hex(
+    "76a914406cf8a18b97a230d15ed82f0d251560a05bda0688ac"
+).unwrap();
 
 let spend_txout: TxOut = TxOut {
     value: Amount::from_sat(500_000_000),

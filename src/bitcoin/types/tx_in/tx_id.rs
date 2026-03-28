@@ -9,6 +9,7 @@ use super::hash::Hash;
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
+/// A Bitcoin transaction identifier (double-SHA256 of the non-witness serialization).
 #[derive(
     Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, BorshSerialize, BorshDeserialize,
 )]

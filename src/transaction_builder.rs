@@ -11,8 +11,8 @@ pub trait TxBuilder<T> {
 pub struct TransactionBuilder;
 
 impl TransactionBuilder {
-    #[allow(clippy::new_ret_no_self)]
     /// Materializes the default builder for the requested chain so callers can begin configuring it.
+    #[allow(clippy::new_ret_no_self)]
     pub fn new<T>() -> T
     where
         T: Default,

@@ -7,7 +7,7 @@ pub mod psbt;
 pub mod types;
 pub mod utils;
 
-/// Bitcoin transaction
+/// Bitcoin transaction -- use [`BitcoinTransactionBuilder`] for ergonomic construction.
 pub use bitcoin_transaction::BitcoinTransaction;
-/// Bitcoin transaction builder
+/// Fluent builder for [`BitcoinTransaction`] values.
 pub use bitcoin_transaction_builder::BitcoinTransactionBuilder;

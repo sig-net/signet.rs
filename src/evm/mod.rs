@@ -4,7 +4,7 @@ mod evm_transaction_builder;
 pub mod types;
 pub mod utils;
 
-/// EVM transaction
+/// EIP-1559 transaction — use [`EVMTransactionBuilder`] for ergonomic construction.
 pub use evm_transaction::EVMTransaction;
-/// EVM transaction builder
+/// Fluent builder for [`EVMTransaction`] values.
 pub use evm_transaction_builder::EVMTransactionBuilder;

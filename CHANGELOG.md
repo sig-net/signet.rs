@@ -12,13 +12,23 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - Fix BIP-143 sighash bug: remove SegWit marker/flag from sighash preimage
 - Fix legacy sighash to use non-witness serialization
 - Fix `from_json` to handle contract creation (to: None)
-- Implement accessList parsing in `from_json`
+- Fix `from_json` panics: return `Result` errors instead of panicking
+- Fix `deserialize_address` silent truncation of values > 255
+- Fix `deserialize_u64`/`deserialize_u128` to support hex strings in serde path
+
+### Added
+
+- `accessList` parsing in `from_json`
+
+### Added
+
+- Comprehensive test suite (70 → 100 unit tests) validated against Alloy and rust-bitcoin
+- Doc comments across EVM types, signer module, and transaction builders
 
 ### Changed
 
-- Add comprehensive test suite (70 → 100 unit tests) validated against Alloy and rust-bitcoin
-- Add doc comments across EVM types, signer module, and transaction builders
 - Fix clippy nursery lints
+- Simplify CI matrix (15 → 11 jobs)
 
 ## [0.0.2] - 2025-11-07
 

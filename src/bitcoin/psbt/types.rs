@@ -47,6 +47,7 @@ pub struct Output {
 }
 
 impl Psbt {
+    /// Create a new PSBT from an unsigned transaction, initialising empty per-input/output maps.
     pub fn from_unsigned_tx(tx: BitcoinTransaction) -> Self {
         Self {
             unsigned_tx: tx.clone(),
@@ -58,6 +59,7 @@ impl Psbt {
         }
     }
 
+    /// Set the witness UTXO (value + script_pubkey) for the given input.
     pub fn update_input_with_witness_utxo(
         &mut self,
         input_index: usize,
@@ -80,6 +82,7 @@ impl Psbt {
         Ok(())
     }
 
+    /// Set the full previous transaction (non-witness UTXO) for the given input.
     pub fn update_input_with_non_witness_utxo(
         &mut self,
         input_index: usize,
@@ -92,6 +95,7 @@ impl Psbt {
         Ok(())
     }
 
+    /// Set the sighash type for the given input.
     pub fn update_input_with_sighash_type(
         &mut self,
         input_index: usize,
@@ -104,6 +108,7 @@ impl Psbt {
         Ok(())
     }
 
+    /// Append a BIP-32 derivation path entry to the given input.
     pub fn update_input_with_bip32_derivation(
         &mut self,
         input_index: usize,
@@ -118,6 +123,7 @@ impl Psbt {
         Ok(())
     }
 
+    /// Append a BIP-32 derivation path entry to the given output.
     pub fn update_output_with_bip32_derivation(
         &mut self,
         output_index: usize,

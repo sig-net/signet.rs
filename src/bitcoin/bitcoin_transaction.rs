@@ -18,11 +18,11 @@ use super::{
     },
 };
 
+/// A Bitcoin transaction with version, locktime, inputs, and outputs.
 ///
 /// ###### Example:
 ///
-/// You can create a Bitcoin transaction directly in your NEAR contract or Rust client
-/// or you can do it from a JSON.
+/// You can create a Bitcoin transaction directly via struct literal or from JSON.
 ///
 /// ```rust
 /// use signet_rs::bitcoin::types::{
@@ -100,7 +100,7 @@ fn sha256d(data: &[u8]) -> Vec<u8> {
 }
 
 impl BitcoinTransaction {
-    /// Encode the transaction into a vector of bytes
+    /// Serialize the transaction to bytes (BIP-144 format if witness data is present).
     pub fn serialize(&self) -> Vec<u8> {
         let mut buffer = Vec::new();
 
@@ -121,6 +121,7 @@ impl BitcoinTransaction {
         Ok(len)
     }
 
+    /// Compute the transaction ID (double-SHA256 of the non-witness serialization, per BIP-141).
     pub fn compute_txid(&self) -> Txid {
         let mut buffer = Vec::new();
         self.encode_without_witness(&mut buffer)
@@ -132,6 +133,7 @@ impl BitcoinTransaction {
         ))
     }
 
+    /// Convert this transaction into a [`Psbt`](crate::bitcoin::psbt::Psbt) for incremental signing.
     pub fn to_psbt(&self) -> crate::bitcoin::psbt::Psbt {
         crate::bitcoin::psbt::Psbt::from_unsigned_tx(self.clone())
     }
@@ -151,6 +153,10 @@ impl BitcoinTransaction {
     }
 
     /// Attach a script sig to the transaction
+    ///
+    /// # Panics
+    ///
+    /// Panics if `tx_type` is a SegWit type (use [`build_with_witness`](Self::build_with_witness) instead).
     pub fn build_with_script_sig(
         &mut self,
         input_index: usize,
@@ -173,6 +179,10 @@ impl BitcoinTransaction {
     }
 
     /// Encode the transaction for signing in SegWit format
+    ///
+    /// # Panics
+    ///
+    /// Panics if the transaction version is not [`Version::Two`].
     pub fn build_for_signing_segwit(
         &self,
         sighash_type: EcdsaSighashType,
@@ -195,6 +205,10 @@ impl BitcoinTransaction {
     }
 
     /// Function to attach a witness to the transaction
+    ///
+    /// # Panics
+    ///
+    /// Panics if `tx_type` is a legacy type (use [`build_with_script_sig`](Self::build_with_script_sig) instead).
     pub fn build_with_witness(
         &mut self,
         input_index: usize,
@@ -284,7 +298,7 @@ impl BitcoinTransaction {
         self.input.is_empty()
     }
 
-    /// Serialise a JSON representation of the transaction into a BitcoinTransaction struct
+    /// Deserialize a JSON object into a [`BitcoinTransaction`].
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         let tx: Self = serde_json::from_str(json)?;
         Ok(tx)
