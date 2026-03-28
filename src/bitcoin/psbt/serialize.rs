@@ -25,8 +25,8 @@ pub enum PsbtSerializeError {
 impl fmt::Display for PsbtSerializeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PsbtSerializeError::Io(s) => write!(f, "IO error: {}", s),
-            PsbtSerializeError::InvalidFormat(s) => write!(f, "Invalid format: {}", s),
+            Self::Io(s) => write!(f, "IO error: {}", s),
+            Self::InvalidFormat(s) => write!(f, "Invalid format: {}", s),
         }
     }
 }
@@ -45,16 +45,16 @@ pub enum PsbtParseError {
 impl fmt::Display for PsbtParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PsbtParseError::InvalidMagic => write!(f, "Invalid PSBT magic bytes"),
-            PsbtParseError::Io(s) => write!(f, "IO error: {}", s),
-            PsbtParseError::InvalidFormat(s) => write!(f, "Invalid format: {}", s),
+            Self::InvalidMagic => write!(f, "Invalid PSBT magic bytes"),
+            Self::Io(s) => write!(f, "IO error: {}", s),
+            Self::InvalidFormat(s) => write!(f, "Invalid format: {}", s),
         }
     }
 }
 
 impl From<IoError> for PsbtSerializeError {
     fn from(e: IoError) -> Self {
-        PsbtSerializeError::Io(alloc::format!("{}", e))
+        Self::Io(alloc::format!("{}", e))
     }
 }
 
@@ -403,7 +403,7 @@ mod tests {
         };
 
         // Create rust-bitcoin PSBT
-        let rb_psbt = RustBitcoinPsbt::from_unsigned_tx(rb_tx.clone()).unwrap();
+        let rb_psbt = RustBitcoinPsbt::from_unsigned_tx(rb_tx).unwrap();
 
         // Serialize rust-bitcoin PSBT
         let rb_serialized = rb_psbt.serialize();
@@ -468,7 +468,7 @@ mod tests {
             ],
         };
 
-        let rb_psbt = RustBitcoinPsbt::from_unsigned_tx(rb_tx.clone()).unwrap();
+        let rb_psbt = RustBitcoinPsbt::from_unsigned_tx(rb_tx).unwrap();
         let rb_serialized = rb_psbt.serialize();
 
         // Create our transaction (matching rust-bitcoin)
@@ -538,7 +538,7 @@ mod tests {
             }],
         };
 
-        let rb_psbt = RustBitcoinPsbt::from_unsigned_tx(rb_tx.clone()).unwrap();
+        let rb_psbt = RustBitcoinPsbt::from_unsigned_tx(rb_tx).unwrap();
         let rb_serialized = rb_psbt.serialize();
 
         // Create our transaction (matching rust-bitcoin)
@@ -596,7 +596,7 @@ mod tests {
             }],
         };
 
-        let mut rb_psbt = RustBitcoinPsbt::from_unsigned_tx(rb_tx.clone()).unwrap();
+        let mut rb_psbt = RustBitcoinPsbt::from_unsigned_tx(rb_tx).unwrap();
 
         rb_psbt.inputs[0].witness_utxo = Some(RustBitcoinTxOut {
             value: RustBitcoinAmount::from_sat(500_000_000),
@@ -672,7 +672,7 @@ mod tests {
             }],
         };
 
-        let rb_psbt = RustBitcoinPsbt::from_unsigned_tx(rb_tx.clone()).unwrap();
+        let rb_psbt = RustBitcoinPsbt::from_unsigned_tx(rb_tx).unwrap();
         let rb_serialized = rb_psbt.serialize();
 
         // Create our transaction (matching rust-bitcoin)

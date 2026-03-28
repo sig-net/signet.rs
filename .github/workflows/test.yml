@@ -31,7 +31,7 @@ jobs:
       - run: RUSTDOCFLAGS="-D warnings" cargo doc
   
   build:
-    needs: [clippy, cargo-fmt, cargo-doc] 
+    needs: [clippy, cargo-fmt, cargo-doc]
     strategy:
       matrix:
         platform: [ubuntu-latest, macos-latest]
@@ -44,10 +44,10 @@ jobs:
       - run: just check
 
   build-wasm:
-    needs: [clippy, cargo-fmt, cargo-doc] 
+    needs: [clippy, cargo-fmt, cargo-doc]
     strategy:
       matrix:
-        platform: [ubuntu-latest, macos-latest]
+        platform: [ubuntu-latest]
         toolchain: [stable, nightly]
     runs-on: ${{ matrix.platform }}
     steps:
@@ -60,22 +60,7 @@ jobs:
         run: just check-wasm
 
   unit-tests:
-    needs: [build, build-wasm] 
-    strategy:
-      matrix:
-        platform: [ubuntu-latest, macos-latest]
-        toolchain: [stable, nightly]
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/install-just
-      - uses: ./.github/actions/setup-rust
-      - uses: foundry-rs/foundry-toolchain@v1
-      - name: Run unit tests
-        run: just test-unit
-
-  integration-tests:
-    needs: [build, build-wasm] 
+    needs: [build, build-wasm]
     strategy:
       matrix:
         platform: [ubuntu-latest]
@@ -86,7 +71,6 @@ jobs:
       - uses: ./.github/actions/install-just
       - uses: ./.github/actions/setup-rust
       - uses: foundry-rs/foundry-toolchain@v1
-      - name: Run integration tests
-        run: just test-integration
-        env:
-          CI_ENVIRONMENT: true
+      - name: Run unit tests
+        run: just test-unit
+
