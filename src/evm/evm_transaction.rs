@@ -172,19 +172,16 @@ impl EVMTransaction {
                     .iter()
                     .filter_map(|entry| {
                         let addr_str = entry["address"].as_str()?;
-                        let addr = parse_eth_address(
-                            addr_str.strip_prefix("0x").unwrap_or(addr_str),
-                        );
+                        let addr =
+                            parse_eth_address(addr_str.strip_prefix("0x").unwrap_or(addr_str));
                         let keys = entry["storageKeys"]
                             .as_array()
                             .map(|keys| {
                                 keys.iter()
                                     .filter_map(|k| {
                                         let s = k.as_str()?;
-                                        let bytes = hex::decode(
-                                            s.strip_prefix("0x").unwrap_or(s),
-                                        )
-                                        .ok()?;
+                                        let bytes =
+                                            hex::decode(s.strip_prefix("0x").unwrap_or(s)).ok()?;
                                         let mut key = [0u8; 32];
                                         key.copy_from_slice(&bytes);
                                         Some(key)
@@ -697,7 +694,9 @@ mod tests {
         let to: Address = address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
         let chain_id = 1u64;
         let value = 1_000_000_000_000_000u128; // 0.001 ETH
-        let to_address = Some(parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+        let to_address = Some(parse_eth_address(
+            "d8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+        ));
 
         let tx = EVMTransaction {
             chain_id,
@@ -741,7 +740,9 @@ mod tests {
         let nonce: u64 = 5;
         let chain_id = 1u64;
         let to: Address = address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
-        let to_address = Some(parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+        let to_address = Some(parse_eth_address(
+            "d8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+        ));
 
         let tx = EVMTransaction {
             chain_id,
@@ -784,7 +785,9 @@ mod tests {
         let chain_id = 1u64;
         let value = 0u128;
         let to: Address = address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
-        let to_address = Some(parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+        let to_address = Some(parse_eth_address(
+            "d8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+        ));
 
         let tx = EVMTransaction {
             chain_id,
@@ -823,15 +826,13 @@ mod tests {
 
     #[test]
     fn test_build_for_signing_different_chain_ids() {
-        let chains: &[(u64, &str)] = &[
-            (137, "Polygon"),
-            (42161, "Arbitrum"),
-            (10, "Optimism"),
-        ];
+        let chains: &[(u64, &str)] = &[(137, "Polygon"), (42161, "Arbitrum"), (10, "Optimism")];
         let nonce: u64 = 0;
         let value = 1_000_000_000_000_000u128;
         let to: Address = address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
-        let to_address = Some(parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+        let to_address = Some(parse_eth_address(
+            "d8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+        ));
 
         for &(chain_id, label) in chains {
             let tx = EVMTransaction {
@@ -879,7 +880,9 @@ mod tests {
         let chain_id = 1u64;
         let value = 0u128;
         let to: Address = address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
-        let to_address = Some(parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+        let to_address = Some(parse_eth_address(
+            "d8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+        ));
 
         let tx = EVMTransaction {
             chain_id,
@@ -932,9 +935,8 @@ mod tests {
         let storage_key_2 = [0xffu8; 32];
 
         // Our access list format: Vec<(Address, Vec<[u8; 32]>)>
-        let our_access_list: crate::evm::types::AccessList = vec![
-            (to_address_bytes, vec![storage_key_1, storage_key_2]),
-        ];
+        let our_access_list: crate::evm::types::AccessList =
+            vec![(to_address_bytes, vec![storage_key_1, storage_key_2])];
 
         let tx = EVMTransaction {
             chain_id,
@@ -953,10 +955,7 @@ mod tests {
         // Build alloy TxEip1559 directly for access list support
         let alloy_access_list = AccessList(vec![AccessListItem {
             address: address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"),
-            storage_keys: vec![
-                storage_key_1.into(),
-                storage_key_2.into(),
-            ],
+            storage_keys: vec![storage_key_1.into(), storage_key_2.into()],
         }]);
 
         let alloy_tx = TxEip1559 {
@@ -995,10 +994,8 @@ mod tests {
         let sk2 = [0xbbu8; 32];
         let sk3 = [0xccu8; 32];
 
-        let our_access_list: crate::evm::types::AccessList = vec![
-            (addr1_bytes, vec![sk1, sk2]),
-            (addr2_bytes, vec![sk3]),
-        ];
+        let our_access_list: crate::evm::types::AccessList =
+            vec![(addr1_bytes, vec![sk1, sk2]), (addr2_bytes, vec![sk3])];
 
         let tx = EVMTransaction {
             chain_id,
@@ -1154,7 +1151,9 @@ mod tests {
         let max_priority_fee_per_gas: u128 = 1_500_000_000; // 1.5 gwei
 
         let to: Address = address!("525521d79134822a342d330bd91DA67976569aF1");
-        let to_address = Some(parse_eth_address("525521d79134822a342d330bd91DA67976569aF1"));
+        let to_address = Some(parse_eth_address(
+            "525521d79134822a342d330bd91DA67976569aF1",
+        ));
 
         let tx = EVMTransaction {
             chain_id,
@@ -1258,7 +1257,9 @@ mod tests {
         let chain_id = 1u64;
         let nonce: u64 = 0;
         let value = 1_000_000_000_000_000u128;
-        let to_address = Some(parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+        let to_address = Some(parse_eth_address(
+            "d8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+        ));
 
         // Explicitly empty input
         let tx_empty = EVMTransaction {

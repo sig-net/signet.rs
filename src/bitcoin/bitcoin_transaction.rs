@@ -1347,8 +1347,7 @@ mod tests {
 
     #[test]
     fn test_segwit_serialization_multiple_witnesses() {
-        let script_bytes =
-            hex::decode("001489abcdefabbaabbaabbaabbaabbaabbaabbaabba").unwrap();
+        let script_bytes = hex::decode("001489abcdefabbaabbaabbaabbaabbaabbaabbaabba").unwrap();
 
         let wit1_sig = vec![0x30; 72];
         let wit1_pk = vec![0x03; 33];
@@ -1581,12 +1580,12 @@ mod tests {
 
         // Large witness stack with 6 items
         let large_witness: Vec<Vec<u8>> = vec![
-            vec![0x00],            // OP_0 for CHECKMULTISIG bug
-            vec![0x30; 72],        // sig 1
-            vec![0x30; 71],        // sig 2
-            vec![0x30; 70],        // sig 3
-            vec![0x30; 73],        // sig 4
-            vec![0x52; 105],       // redeem script
+            vec![0x00],      // OP_0 for CHECKMULTISIG bug
+            vec![0x30; 72],  // sig 1
+            vec![0x30; 71],  // sig 2
+            vec![0x30; 70],  // sig 3
+            vec![0x30; 73],  // sig 4
+            vec![0x52; 105], // redeem script
         ];
 
         let rb_tx = RustBitcoinTransaction {
@@ -1636,10 +1635,8 @@ mod tests {
     #[test]
     fn test_txid_with_real_scripts() {
         // P2WPKH output scripts: OP_0 <20-byte-hash>
-        let output_script_1 =
-            hex::decode("001489abcdefabbaabbaabbaabbaabbaabbaabbaabba").unwrap();
-        let output_script_2 =
-            hex::decode("0014deadbeefdeadbeefdeadbeefdeadbeefdeadbeef").unwrap();
+        let output_script_1 = hex::decode("001489abcdefabbaabbaabbaabbaabbaabbaabbaabba").unwrap();
+        let output_script_2 = hex::decode("0014deadbeefdeadbeefdeadbeefdeadbeefdeadbeef").unwrap();
 
         let witness_data = vec![vec![0x30; 72], vec![0x02; 33]];
 
@@ -1705,8 +1702,7 @@ mod tests {
 
     #[test]
     fn test_build_with_witness_p2wpkh() {
-        let script_bytes =
-            hex::decode("001489abcdefabbaabbaabbaabbaabbaabbaabbaabba").unwrap();
+        let script_bytes = hex::decode("001489abcdefabbaabbaabbaabbaabbaabbaabbaabba").unwrap();
         let witness_sig = vec![0x30; 72];
         let witness_pubkey = vec![0x02; 33];
 
@@ -1765,10 +1761,10 @@ mod tests {
 
         // P2WSH witness: OP_0, sig1, sig2, redeem_script (multisig)
         let witness_items = vec![
-            vec![0x00],        // OP_0 for CHECKMULTISIG bug
-            vec![0x30; 72],    // signature 1
-            vec![0x30; 71],    // signature 2
-            vec![0x52; 71],    // redeem script (mock)
+            vec![0x00],     // OP_0 for CHECKMULTISIG bug
+            vec![0x30; 72], // signature 1
+            vec![0x30; 71], // signature 2
+            vec![0x52; 71], // redeem script (mock)
         ];
 
         let rb_tx = RustBitcoinTransaction {
@@ -1809,11 +1805,7 @@ mod tests {
             }],
         };
 
-        let our_serialized = our_tx.build_with_witness(
-            0,
-            witness_items,
-            TransactionType::P2WSH,
-        );
+        let our_serialized = our_tx.build_with_witness(0, witness_items, TransactionType::P2WSH);
 
         assert_eq!(rb_serialized, our_serialized);
     }
@@ -1985,10 +1977,9 @@ mod tests {
         let script_bytes = hex::decode(script_hex).unwrap();
         let value_sats: u64 = 50_000_000;
 
-        let txid_bytes = hex::decode(
-            "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-        )
-        .unwrap();
+        let txid_bytes =
+            hex::decode("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
+                .unwrap();
         let mut display_arr = [0u8; 32];
         display_arr.copy_from_slice(&txid_bytes);
         let mut internal_arr = display_arr;
@@ -2079,7 +2070,10 @@ mod tests {
             value_sats,
         );
 
-        assert_eq!(rb_buf, our_buf, "Sighash must match even when input 0 has witness data");
+        assert_eq!(
+            rb_buf, our_buf,
+            "Sighash must match even when input 0 has witness data"
+        );
     }
 
     #[test]
