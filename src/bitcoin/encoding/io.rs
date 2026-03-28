@@ -22,10 +22,10 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::UnexpectedEof => write!(f, "unexpected end of file"),
-            Error::InvalidData(msg) => write!(f, "invalid data: {}", msg),
-            Error::NonMinimalVarInt => write!(f, "non-minimal varint"),
-            Error::OversizedVectorAllocation => write!(f, "oversized vector allocation"),
+            Self::UnexpectedEof => write!(f, "unexpected end of file"),
+            Self::InvalidData(msg) => write!(f, "invalid data: {}", msg),
+            Self::NonMinimalVarInt => write!(f, "non-minimal varint"),
+            Self::OversizedVectorAllocation => write!(f, "oversized vector allocation"),
         }
     }
 }

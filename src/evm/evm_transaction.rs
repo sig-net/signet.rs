@@ -41,7 +41,6 @@ use alloc::{string::ToString, vec, vec::Vec};
 /// };
 /// ```
 ///
-/// Signing-ready EIP-1559 transaction produced by the builder or JSON parser.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EVMTransaction {
     #[serde(deserialize_with = "deserialize_u64")]
@@ -63,7 +62,6 @@ pub struct EVMTransaction {
 }
 
 impl EVMTransaction {
-    /// RLP-encode the EIP-1559 payload prefixed with transaction type (0x02) for signing.
     pub fn build_for_signing(&self) -> Vec<u8> {
         let mut rlp_stream = RlpStream::new();
 
@@ -78,7 +76,6 @@ impl EVMTransaction {
         rlp_stream.out().to_vec()
     }
 
-    /// RLP-encode the transaction including `v`, `r`, `s` to broadcast to an RPC node.
     pub fn build_with_signature(&self, signature: &Signature) -> Vec<u8> {
         let mut rlp_stream = RlpStream::new();
 
@@ -130,16 +127,15 @@ impl EVMTransaction {
         }
     }
 
-    /// Build an [`EVMTransaction`] from RPC-style JSON (hex strings for numeric fields).
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         let v: serde_json::Value = serde_json::from_str(json)?;
 
-        let to = v["to"].as_str().unwrap_or_default().to_string();
-
-        let to_parsed = parse_eth_address(
-            to.strip_prefix("0x")
-                .unwrap_or("0000000000000000000000000000000000000000"),
-        );
+        let to_parsed = match v["to"].as_str() {
+            Some(s) if !s.is_empty() && s != "0x" => {
+                Some(parse_eth_address(s.strip_prefix("0x").unwrap_or(s)))
+            }
+            _ => None,
+        };
 
         let nonce_str = v["nonce"].as_str().expect("nonce should be provided");
         let nonce = parse_u64(nonce_str).expect("nonce should be a valid u64");
@@ -169,19 +165,49 @@ impl EVMTransaction {
         let input =
             hex::decode(input.strip_prefix("0x").unwrap_or("")).expect("input should be hex");
 
-        // TODO: Implement access list
-        // let access_list = v["accessList"].as_str().unwrap_or_default().to_string();
+        let access_list = v["accessList"]
+            .as_array()
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|entry| {
+                        let addr_str = entry["address"].as_str()?;
+                        let addr = parse_eth_address(
+                            addr_str.strip_prefix("0x").unwrap_or(addr_str),
+                        );
+                        let keys = entry["storageKeys"]
+                            .as_array()
+                            .map(|keys| {
+                                keys.iter()
+                                    .filter_map(|k| {
+                                        let s = k.as_str()?;
+                                        let bytes = hex::decode(
+                                            s.strip_prefix("0x").unwrap_or(s),
+                                        )
+                                        .ok()?;
+                                        let mut key = [0u8; 32];
+                                        key.copy_from_slice(&bytes);
+                                        Some(key)
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        Some((addr, keys))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
 
         Ok(Self {
             chain_id,
             nonce,
-            to: Some(to_parsed),
+            to: to_parsed,
             value,
             input,
             gas_limit,
             max_fee_per_gas,
             max_priority_fee_per_gas,
-            access_list: vec![],
+            access_list,
         })
     }
 }
@@ -341,7 +367,7 @@ mod tests {
         primitives::{address, hex, Address, Bytes, U256},
         rpc::types::{AccessList, TransactionRequest},
     };
-    use alloy_primitives::{b256, Signature};
+    use alloy_primitives::{b256, Signature, TxKind};
 
     use crate::evm::types::Signature as OmniSignature;
     use crate::evm::{evm_transaction::EVMTransaction, utils::parse_eth_address};
@@ -663,5 +689,627 @@ mod tests {
             result.is_ok(),
             "Expected deserialization to work with array of numbers"
         );
+    }
+
+    #[test]
+    fn test_build_for_signing_high_nonce() {
+        let nonce: u64 = u64::MAX - 1;
+        let to: Address = address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
+        let chain_id = 1u64;
+        let value = 1_000_000_000_000_000u128; // 0.001 ETH
+        let to_address = Some(parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+
+        let tx = EVMTransaction {
+            chain_id,
+            nonce,
+            to: to_address,
+            value,
+            input: vec![],
+            gas_limit: GAS_LIMIT,
+            max_fee_per_gas: MAX_FEE_PER_GAS,
+            max_priority_fee_per_gas: MAX_PRIORITY_FEE_PER_GAS,
+            access_list: vec![],
+        };
+
+        let rlp_bytes = tx.build_for_signing();
+
+        let alloy_tx = TransactionRequest::default()
+            .with_chain_id(chain_id)
+            .with_nonce(nonce)
+            .with_to(to)
+            .with_value(U256::from(value))
+            .with_max_priority_fee_per_gas(MAX_PRIORITY_FEE_PER_GAS)
+            .with_max_fee_per_gas(MAX_FEE_PER_GAS)
+            .with_gas_limit(GAS_LIMIT)
+            .with_input(vec![]);
+
+        let alloy_unsigned = alloy_tx
+            .build_unsigned()
+            .expect("Failed to build unsigned transaction");
+        let rlp_encoded = alloy_unsigned.eip1559().unwrap();
+
+        let mut buf = vec![];
+        rlp_encoded.encode_for_signing(&mut buf);
+
+        assert_eq!(buf, rlp_bytes);
+    }
+
+    #[test]
+    fn test_build_for_signing_large_value() {
+        // 100_000 ETH in wei = 100_000 * 10^18
+        let value: u128 = 100_000 * 1_000_000_000_000_000_000u128;
+        let nonce: u64 = 5;
+        let chain_id = 1u64;
+        let to: Address = address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
+        let to_address = Some(parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+
+        let tx = EVMTransaction {
+            chain_id,
+            nonce,
+            to: to_address,
+            value,
+            input: vec![],
+            gas_limit: GAS_LIMIT,
+            max_fee_per_gas: MAX_FEE_PER_GAS,
+            max_priority_fee_per_gas: MAX_PRIORITY_FEE_PER_GAS,
+            access_list: vec![],
+        };
+
+        let rlp_bytes = tx.build_for_signing();
+
+        let alloy_tx = TransactionRequest::default()
+            .with_chain_id(chain_id)
+            .with_nonce(nonce)
+            .with_to(to)
+            .with_value(U256::from(value))
+            .with_max_priority_fee_per_gas(MAX_PRIORITY_FEE_PER_GAS)
+            .with_max_fee_per_gas(MAX_FEE_PER_GAS)
+            .with_gas_limit(GAS_LIMIT)
+            .with_input(vec![]);
+
+        let alloy_unsigned = alloy_tx
+            .build_unsigned()
+            .expect("Failed to build unsigned transaction");
+        let rlp_encoded = alloy_unsigned.eip1559().unwrap();
+
+        let mut buf = vec![];
+        rlp_encoded.encode_for_signing(&mut buf);
+
+        assert_eq!(buf, rlp_bytes);
+    }
+
+    #[test]
+    fn test_build_for_signing_zero_value() {
+        let nonce: u64 = 10;
+        let chain_id = 1u64;
+        let value = 0u128;
+        let to: Address = address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
+        let to_address = Some(parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+
+        let tx = EVMTransaction {
+            chain_id,
+            nonce,
+            to: to_address,
+            value,
+            input: vec![],
+            gas_limit: GAS_LIMIT,
+            max_fee_per_gas: MAX_FEE_PER_GAS,
+            max_priority_fee_per_gas: MAX_PRIORITY_FEE_PER_GAS,
+            access_list: vec![],
+        };
+
+        let rlp_bytes = tx.build_for_signing();
+
+        let alloy_tx = TransactionRequest::default()
+            .with_chain_id(chain_id)
+            .with_nonce(nonce)
+            .with_to(to)
+            .with_value(U256::from(value))
+            .with_max_priority_fee_per_gas(MAX_PRIORITY_FEE_PER_GAS)
+            .with_max_fee_per_gas(MAX_FEE_PER_GAS)
+            .with_gas_limit(GAS_LIMIT)
+            .with_input(vec![]);
+
+        let alloy_unsigned = alloy_tx
+            .build_unsigned()
+            .expect("Failed to build unsigned transaction");
+        let rlp_encoded = alloy_unsigned.eip1559().unwrap();
+
+        let mut buf = vec![];
+        rlp_encoded.encode_for_signing(&mut buf);
+
+        assert_eq!(buf, rlp_bytes);
+    }
+
+    #[test]
+    fn test_build_for_signing_different_chain_ids() {
+        let chains: &[(u64, &str)] = &[
+            (137, "Polygon"),
+            (42161, "Arbitrum"),
+            (10, "Optimism"),
+        ];
+        let nonce: u64 = 0;
+        let value = 1_000_000_000_000_000u128;
+        let to: Address = address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
+        let to_address = Some(parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+
+        for &(chain_id, label) in chains {
+            let tx = EVMTransaction {
+                chain_id,
+                nonce,
+                to: to_address,
+                value,
+                input: vec![],
+                gas_limit: GAS_LIMIT,
+                max_fee_per_gas: MAX_FEE_PER_GAS,
+                max_priority_fee_per_gas: MAX_PRIORITY_FEE_PER_GAS,
+                access_list: vec![],
+            };
+
+            let rlp_bytes = tx.build_for_signing();
+
+            let alloy_tx = TransactionRequest::default()
+                .with_chain_id(chain_id)
+                .with_nonce(nonce)
+                .with_to(to)
+                .with_value(U256::from(value))
+                .with_max_priority_fee_per_gas(MAX_PRIORITY_FEE_PER_GAS)
+                .with_max_fee_per_gas(MAX_FEE_PER_GAS)
+                .with_gas_limit(GAS_LIMIT)
+                .with_input(vec![]);
+
+            let alloy_unsigned = alloy_tx
+                .build_unsigned()
+                .expect("Failed to build unsigned transaction");
+            let rlp_encoded = alloy_unsigned.eip1559().unwrap();
+
+            let mut buf = vec![];
+            rlp_encoded.encode_for_signing(&mut buf);
+
+            assert_eq!(buf, rlp_bytes, "Mismatch for chain {label} (id={chain_id})");
+        }
+    }
+
+    #[test]
+    fn test_build_for_signing_high_gas_values() {
+        let max_fee_per_gas: u128 = 500_000_000_000; // 500 gwei
+        let max_priority_fee_per_gas: u128 = 50_000_000_000; // 50 gwei
+        let gas_limit: u128 = 1_000_000;
+        let nonce: u64 = 1;
+        let chain_id = 1u64;
+        let value = 0u128;
+        let to: Address = address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
+        let to_address = Some(parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+
+        let tx = EVMTransaction {
+            chain_id,
+            nonce,
+            to: to_address,
+            value,
+            input: vec![],
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            access_list: vec![],
+        };
+
+        let rlp_bytes = tx.build_for_signing();
+
+        let alloy_tx = TransactionRequest::default()
+            .with_chain_id(chain_id)
+            .with_nonce(nonce)
+            .with_to(to)
+            .with_value(U256::from(value))
+            .with_max_priority_fee_per_gas(max_priority_fee_per_gas)
+            .with_max_fee_per_gas(max_fee_per_gas)
+            .with_gas_limit(gas_limit)
+            .with_input(vec![]);
+
+        let alloy_unsigned = alloy_tx
+            .build_unsigned()
+            .expect("Failed to build unsigned transaction");
+        let rlp_encoded = alloy_unsigned.eip1559().unwrap();
+
+        let mut buf = vec![];
+        rlp_encoded.encode_for_signing(&mut buf);
+
+        assert_eq!(buf, rlp_bytes);
+    }
+
+    #[test]
+    fn test_build_for_signing_with_access_list() {
+        use alloy::rpc::types::AccessListItem;
+
+        let chain_id = 1u64;
+        let nonce: u64 = 3;
+        let value = 0u128;
+        let gas_limit: u128 = 100_000;
+        let max_fee_per_gas: u128 = 30_000_000_000;
+        let max_priority_fee_per_gas: u128 = 2_000_000_000;
+        let to_address_bytes = parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
+
+        let storage_key_1 = [0x01u8; 32];
+        let storage_key_2 = [0xffu8; 32];
+
+        // Our access list format: Vec<(Address, Vec<[u8; 32]>)>
+        let our_access_list: crate::evm::types::AccessList = vec![
+            (to_address_bytes, vec![storage_key_1, storage_key_2]),
+        ];
+
+        let tx = EVMTransaction {
+            chain_id,
+            nonce,
+            to: Some(to_address_bytes),
+            value,
+            input: vec![],
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            access_list: our_access_list,
+        };
+
+        let rlp_bytes = tx.build_for_signing();
+
+        // Build alloy TxEip1559 directly for access list support
+        let alloy_access_list = AccessList(vec![AccessListItem {
+            address: address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"),
+            storage_keys: vec![
+                storage_key_1.into(),
+                storage_key_2.into(),
+            ],
+        }]);
+
+        let alloy_tx = TxEip1559 {
+            chain_id,
+            nonce,
+            gas_limit,
+            to: TxKind::Call(address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045")),
+            value: U256::from(value),
+            input: Bytes::new(),
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            access_list: alloy_access_list,
+        };
+
+        let mut buf = vec![];
+        alloy_tx.encode_for_signing(&mut buf);
+
+        assert_eq!(buf, rlp_bytes);
+    }
+
+    #[test]
+    fn test_build_for_signing_with_multiple_access_list_entries() {
+        use alloy::rpc::types::AccessListItem;
+
+        let chain_id = 1u64;
+        let nonce: u64 = 7;
+        let value = 0u128;
+        let gas_limit: u128 = 200_000;
+        let max_fee_per_gas: u128 = 25_000_000_000;
+        let max_priority_fee_per_gas: u128 = 1_500_000_000;
+
+        let addr1_bytes = parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
+        let addr2_bytes = parse_eth_address("6069a6c32cf691f5982febae4faf8a6f3ab2f0f6");
+
+        let sk1 = [0xaau8; 32];
+        let sk2 = [0xbbu8; 32];
+        let sk3 = [0xccu8; 32];
+
+        let our_access_list: crate::evm::types::AccessList = vec![
+            (addr1_bytes, vec![sk1, sk2]),
+            (addr2_bytes, vec![sk3]),
+        ];
+
+        let tx = EVMTransaction {
+            chain_id,
+            nonce,
+            to: Some(addr1_bytes),
+            value,
+            input: vec![],
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            access_list: our_access_list,
+        };
+
+        let rlp_bytes = tx.build_for_signing();
+
+        let alloy_access_list = AccessList(vec![
+            AccessListItem {
+                address: address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"),
+                storage_keys: vec![sk1.into(), sk2.into()],
+            },
+            AccessListItem {
+                address: address!("6069a6c32cf691f5982febae4faf8a6f3ab2f0f6"),
+                storage_keys: vec![sk3.into()],
+            },
+        ]);
+
+        let alloy_tx = TxEip1559 {
+            chain_id,
+            nonce,
+            gas_limit,
+            to: TxKind::Call(address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045")),
+            value: U256::from(value),
+            input: Bytes::new(),
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            access_list: alloy_access_list,
+        };
+
+        let mut buf = vec![];
+        alloy_tx.encode_for_signing(&mut buf);
+
+        assert_eq!(buf, rlp_bytes);
+    }
+
+    #[test]
+    fn test_build_for_signing_contract_creation() {
+        let chain_id = 1u64;
+        let nonce: u64 = 0;
+        let value = 0u128;
+        let gas_limit: u128 = 3_000_000;
+        let max_fee_per_gas: u128 = 20_000_000_000;
+        let max_priority_fee_per_gas: u128 = 1_000_000_000;
+        // Simple contract bytecode (just STOP opcode)
+        let input = vec![0x60, 0x00, 0x60, 0x00, 0x52, 0x60, 0x01, 0x60, 0x00, 0xf3];
+
+        let tx = EVMTransaction {
+            chain_id,
+            nonce,
+            to: None,
+            value,
+            input: input.clone(),
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            access_list: vec![],
+        };
+
+        let rlp_bytes = tx.build_for_signing();
+
+        let alloy_tx = TxEip1559 {
+            chain_id,
+            nonce,
+            gas_limit,
+            to: TxKind::Create,
+            value: U256::from(value),
+            input: Bytes::from(input),
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            access_list: AccessList::default(),
+        };
+
+        let mut buf = vec![];
+        alloy_tx.encode_for_signing(&mut buf);
+
+        assert_eq!(buf, rlp_bytes);
+    }
+
+    #[test]
+    fn test_build_with_signature_different_parity() {
+        let chain_id = 1u64;
+        let nonce: u64 = 0x10;
+        let gas_limit: u128 = 21_000;
+        let value = 1_000_000_000_000_000u128;
+        let max_fee_per_gas: u128 = 20_000_000_000;
+        let max_priority_fee_per_gas: u128 = 1_000_000_000;
+
+        let to_str = "d8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
+        let to_address = Some(parse_eth_address(to_str));
+
+        let tx_omni = EVMTransaction {
+            chain_id,
+            nonce,
+            to: to_address,
+            value,
+            input: vec![],
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            access_list: vec![],
+        };
+
+        let alloy_tx = TxEip1559 {
+            chain_id,
+            nonce,
+            gas_limit,
+            to: TxKind::Call(address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045")),
+            value: U256::from(value),
+            input: Bytes::new(),
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            access_list: AccessList::default(),
+        };
+
+        // v=1 (odd parity)
+        let sig = Signature::from_scalars_and_parity(
+            b256!("840cfc572845f5786e702984c2a582528cad4b49b2a10b9db1be7fca90058565"),
+            b256!("25e7109ceb98168d95b09b18bbf6b685130e0562f233877d492b94eee0c5b6d1"),
+            true,
+        )
+        .unwrap();
+
+        let mut alloy_encoded: Vec<u8> = vec![];
+        alloy_tx.encode_with_signature(&sig, &mut alloy_encoded, false);
+
+        let omni_sig = OmniSignature {
+            v: sig.v().to_u64(),
+            r: sig.r().to_be_bytes::<32>().to_vec(),
+            s: sig.s().to_be_bytes::<32>().to_vec(),
+        };
+
+        let omni_encoded = tx_omni.build_with_signature(&omni_sig);
+
+        assert_eq!(alloy_encoded, omni_encoded);
+    }
+
+    #[test]
+    fn test_build_for_signing_sepolia() {
+        let chain_id = 11155111u64;
+        let nonce: u64 = 42;
+        let value = 50_000_000_000_000_000u128; // 0.05 ETH
+        let gas_limit: u128 = 21_000;
+        let max_fee_per_gas: u128 = 10_000_000_000; // 10 gwei
+        let max_priority_fee_per_gas: u128 = 1_500_000_000; // 1.5 gwei
+
+        let to: Address = address!("525521d79134822a342d330bd91DA67976569aF1");
+        let to_address = Some(parse_eth_address("525521d79134822a342d330bd91DA67976569aF1"));
+
+        let tx = EVMTransaction {
+            chain_id,
+            nonce,
+            to: to_address,
+            value,
+            input: vec![],
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            access_list: vec![],
+        };
+
+        let rlp_bytes = tx.build_for_signing();
+
+        let alloy_tx = TransactionRequest::default()
+            .with_chain_id(chain_id)
+            .with_nonce(nonce)
+            .with_to(to)
+            .with_value(U256::from(value))
+            .with_max_priority_fee_per_gas(max_priority_fee_per_gas)
+            .with_max_fee_per_gas(max_fee_per_gas)
+            .with_gas_limit(gas_limit)
+            .with_input(vec![]);
+
+        let alloy_unsigned = alloy_tx
+            .build_unsigned()
+            .expect("Failed to build unsigned transaction");
+        let rlp_encoded = alloy_unsigned.eip1559().unwrap();
+
+        let mut buf = vec![];
+        rlp_encoded.encode_for_signing(&mut buf);
+
+        assert_eq!(buf, rlp_bytes);
+    }
+
+    #[test]
+    fn test_from_json_contract_creation() {
+        let json = r#"
+        {
+            "to": "0x",
+            "nonce": "0",
+            "value": "0",
+            "maxPriorityFeePerGas": "0x1",
+            "maxFeePerGas": "0x1",
+            "gasLimit": "3000000",
+            "chainId": "1",
+            "input": "0x6000"
+        }"#;
+
+        let tx = EVMTransaction::from_json(json).unwrap();
+        assert_eq!(tx.to, None);
+        assert_eq!(tx.input, vec![0x60, 0x00]);
+        assert_eq!(tx.gas_limit, 3_000_000);
+    }
+
+    #[test]
+    fn test_from_json_with_access_list() {
+        let json = r#"
+        {
+            "to": "0x525521d79134822a342d330bd91DA67976569aF1",
+            "nonce": "1",
+            "value": "0",
+            "maxPriorityFeePerGas": "0x3b9aca00",
+            "maxFeePerGas": "0x4a817c800",
+            "gasLimit": "100000",
+            "chainId": "1",
+            "input": "0x",
+            "accessList": [
+                {
+                    "address": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+                    "storageKeys": [
+                        "0x0000000000000000000000000000000000000000000000000000000000000001"
+                    ]
+                }
+            ]
+        }"#;
+
+        let tx = EVMTransaction::from_json(json).unwrap();
+
+        assert_eq!(tx.access_list.len(), 1);
+        assert_eq!(
+            tx.access_list[0].0,
+            parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045")
+        );
+        assert_eq!(tx.access_list[0].1.len(), 1);
+        let mut expected_key = [0u8; 32];
+        expected_key[31] = 1;
+        assert_eq!(tx.access_list[0].1[0], expected_key);
+
+        assert_eq!(tx.chain_id, 1);
+        assert_eq!(tx.nonce, 1);
+        assert_eq!(tx.value, 0);
+        assert_eq!(tx.gas_limit, 100_000);
+        assert_eq!(tx.max_priority_fee_per_gas, 1_000_000_000);
+        assert_eq!(tx.max_fee_per_gas, 20_000_000_000);
+    }
+
+    #[test]
+    fn test_build_for_signing_empty_input_vs_no_input() {
+        let chain_id = 1u64;
+        let nonce: u64 = 0;
+        let value = 1_000_000_000_000_000u128;
+        let to_address = Some(parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+
+        // Explicitly empty input
+        let tx_empty = EVMTransaction {
+            chain_id,
+            nonce,
+            to: to_address,
+            value,
+            input: vec![],
+            gas_limit: GAS_LIMIT,
+            max_fee_per_gas: MAX_FEE_PER_GAS,
+            max_priority_fee_per_gas: MAX_PRIORITY_FEE_PER_GAS,
+            access_list: vec![],
+        };
+
+        // Also empty but via Vec::new()
+        let tx_new = EVMTransaction {
+            chain_id,
+            nonce,
+            to: to_address,
+            value,
+            input: Vec::new(),
+            gas_limit: GAS_LIMIT,
+            max_fee_per_gas: MAX_FEE_PER_GAS,
+            max_priority_fee_per_gas: MAX_PRIORITY_FEE_PER_GAS,
+            access_list: vec![],
+        };
+
+        let rlp_empty = tx_empty.build_for_signing();
+        let rlp_new = tx_new.build_for_signing();
+
+        assert_eq!(rlp_empty, rlp_new);
+
+        // Also verify against Alloy
+        let alloy_tx = TransactionRequest::default()
+            .with_chain_id(chain_id)
+            .with_nonce(nonce)
+            .with_to(address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"))
+            .with_value(U256::from(value))
+            .with_max_priority_fee_per_gas(MAX_PRIORITY_FEE_PER_GAS)
+            .with_max_fee_per_gas(MAX_FEE_PER_GAS)
+            .with_gas_limit(GAS_LIMIT)
+            .with_input(vec![]);
+
+        let alloy_unsigned = alloy_tx
+            .build_unsigned()
+            .expect("Failed to build unsigned transaction");
+        let rlp_encoded = alloy_unsigned.eip1559().unwrap();
+
+        let mut buf = vec![];
+        rlp_encoded.encode_for_signing(&mut buf);
+
+        assert_eq!(buf, rlp_empty);
     }
 }
