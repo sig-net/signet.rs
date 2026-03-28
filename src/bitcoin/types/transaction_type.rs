@@ -1,3 +1,4 @@
+/// The spending type of a Bitcoin transaction input.
 pub enum TransactionType {
     /// Pay to public key hash
     P2PKH,

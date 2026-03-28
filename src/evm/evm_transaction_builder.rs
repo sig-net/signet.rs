@@ -28,6 +28,10 @@ impl Default for EVMTransactionBuilder {
 
 impl TxBuilder<EVMTransaction> for EVMTransactionBuilder {
     /// Ensures mandatory fields are set and returns an [`EVMTransaction`] ready for encoding.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `chain_id`, `nonce`, `gas_limit`, or `max_fee_per_gas` have not been set.
     fn build(&self) -> EVMTransaction {
         EVMTransaction {
             chain_id: self.chain_id.expect("chain_id is mandatory"),
@@ -107,7 +111,7 @@ impl EVMTransactionBuilder {
         self
     }
 
-    /// Provides the full access list for typed transactions; defaults to empty.
+    /// Sets the EIP-2930 access list; defaults to empty.
     pub fn access_list(mut self, access_list: AccessList) -> Self {
         self.access_list = Some(access_list);
         self

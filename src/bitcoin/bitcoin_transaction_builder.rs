@@ -25,6 +25,10 @@ impl Default for BitcoinTransactionBuilder {
 
 impl TxBuilder<BitcoinTransaction> for BitcoinTransactionBuilder {
     /// Ensures all mandatory fields are set and returns the immutable transaction.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `version` or `lock_time` have not been set.
     fn build(&self) -> BitcoinTransaction {
         BitcoinTransaction {
             version: self.version.expect("Missing version"),

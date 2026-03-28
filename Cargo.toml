@@ -7,7 +7,9 @@ edition = "2021"
 repository = "https://github.com/sig-net/signet.rs"
 documentation = "https://docs.rs/signet-rs"
 readme = "README.md"
-description = "Transaction builder for all chains in Rust"
+description = "Minimal no_std transaction builders for Bitcoin and EVM"
+keywords = ["bitcoin", "evm", "transaction", "no-std", "signing"]
+categories = ["cryptography::cryptocurrencies", "no-std::no-alloc"]
 
 [lib]
 crate-type = ["rlib"]  # Only rlib for Substrate integration

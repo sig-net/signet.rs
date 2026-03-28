@@ -11,6 +11,7 @@ use crate::bitcoin::encoding::{
     Decodable,
 };
 
+/// A 32-byte double-SHA256 hash stored in internal byte order (reversed from display).
 #[derive(
     Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, BorshSerialize, BorshDeserialize,
 )]

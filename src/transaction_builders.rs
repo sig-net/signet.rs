@@ -1,4 +1,4 @@
-//! Low level transaction builders for different blockchains.
+//! Convenience type aliases for chain-specific transaction builders.
 #[cfg(feature = "bitcoin")]
 use crate::bitcoin::BitcoinTransactionBuilder;
 

@@ -11,6 +11,7 @@ use crate::bitcoin::encoding::{
     Decodable,
 };
 
+/// A Bitcoin script stored as raw bytes.
 #[derive(Debug, Default, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct ScriptBuf(pub Vec<u8>);
 
@@ -89,13 +90,6 @@ impl<'de> serde::Deserialize<'de> for ScriptBuf {
                     formatter.write_str("a script hex")
                 }
 
-                // fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-                // where
-                //     E: serde::de::Error,
-                // {
-                //     Ok(ScriptBuf::from_hex(v).unwrap())
-                // }
-
                 fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
                 where
                     E: serde::de::Error,
@@ -118,7 +112,6 @@ impl<'de> serde::Deserialize<'de> for ScriptBuf {
                     Ok(ScriptBuf(vec))
                 }
             }
-            // deserializer.deserialize_str(Visitor)
             deserializer.deserialize_any(Visitor)
         } else {
             struct BytesVisitor;
