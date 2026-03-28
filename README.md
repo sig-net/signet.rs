@@ -14,7 +14,7 @@
 
 ```toml
 [dependencies]
-signet-rs = "1.0.0"
+signet-rs = "0.0.3"
 ```
 
 ## Features

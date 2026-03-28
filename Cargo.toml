@@ -1,6 +1,6 @@
 [package]
 name = "signet-rs"
-version = "1.0.0"
+version = "0.0.3"
 authors = ["Sig Network", "Proximity Labs Limited"]
 license = "Apache-2.0"
 edition = "2021"
