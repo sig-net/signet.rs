@@ -15,3 +15,19 @@ pub fn parse_eth_address(address: &str) -> Address {
     result.copy_from_slice(&address);
     result
 }
+
+/// Parse an Ethereum address from a hex string, tolerating an optional `0x`
+/// prefix and returning `None` instead of panicking on invalid input.
+///
+/// Returns `None` if the string is not valid hex or does not decode to exactly
+/// 20 bytes.
+pub fn parse_eth_address_checked(address: &str) -> Option<Address> {
+    let address = address.strip_prefix("0x").unwrap_or(address);
+    let bytes = hex::decode(address).ok()?;
+    if bytes.len() != 20 {
+        return None;
+    }
+    let mut result = [0u8; 20];
+    result.copy_from_slice(&bytes);
+    Some(result)
+}
