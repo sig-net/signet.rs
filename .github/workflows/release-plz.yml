@@ -1,29 +1,58 @@
 name: Release-plz
 
-permissions:
-  pull-requests: write
-  contents: write
-
 on:
   push:
     branches:
       - main
 
 jobs:
-  release-plz:
-    name: Release-plz
+  # Publish any unpublished version to crates.io, then create the git tag + GitHub release.
+  release-plz-release:
+    name: Release-plz release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PLZ_GITHUB_TOKEN || github.token }}
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Run release-plz
-        uses: MarcoIeni/release-plz-action@v0.5
+        uses: release-plz/action@v0.5
+        with:
+          command: release
         env:
-          # https://marcoieni.github.io/release-plz/github-action.html#triggering-further-workflow-runs
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_GITHUB_TOKEN || github.token }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # Open/update the release PR that bumps versions and regenerates the changelog.
+  release-plz-pr:
+    name: Release-plz PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    # Serialize release-PR runs; never cancel in-progress (that would drop changelog updates).
+    concurrency:
+      group: release-plz-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PLZ_GITHUB_TOKEN || github.token }}
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Run release-plz
+        uses: release-plz/action@v0.5
+        with:
+          command: release-pr
+        env:
+          # A PAT (RELEASE_PLZ_GITHUB_TOKEN) lets the release PR trigger CI; falls back to the built-in token.
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_GITHUB_TOKEN || github.token }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
