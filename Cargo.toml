@@ -4,6 +4,7 @@ version = "1.0.1"
 authors = ["Sig Network", "Proximity Labs Limited"]
 license = "Apache-2.0"
 edition = "2021"
+rust-version = "1.76"
 repository = "https://github.com/sig-net/signet.rs"
 documentation = "https://docs.rs/signet-rs"
 readme = "README.md"

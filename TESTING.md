@@ -1,210 +1,75 @@
-# Testing Guide for Signet-RS
+# Testing Guide for signet-rs
 
-This guide explains how to test the signet-rs library, which provides transaction builders for Bitcoin and EVM chains.
+`signet-rs` builds `no_std` transaction signing payloads for Bitcoin and EVM. This guide describes how the crate is tested and how to run and extend the suite.
 
-## Test Structure
+## How tests are organized
 
-The repository contains multiple levels of testing:
+All tests are **inline unit tests** — `#[cfg(test)] mod tests { ... }` blocks that live next to the code they exercise in `src/`. There is currently no separate integration-test suite: the `tests/` directory contains no `.rs` files, so `just test-integration` (`cargo test --test '*'`) matches nothing.
 
-### 1. Unit Tests (59 tests)
-Located within the source files themselves, these test individual components in isolation.
+The heaviest coverage is in the two serializers — `src/bitcoin/bitcoin_transaction.rs` (transaction and sighash round-trips) and `src/evm/evm_transaction.rs` (EIP-1559 RLP encoding for signing and with-signature) — with focused tests across the Bitcoin primitive types (`src/bitcoin/types/`), PSBT serialization (`src/bitcoin/psbt/`), DER signature encoding (`src/bitcoin/utils.rs`), and EVM address / access-list handling (`src/evm/`).
 
-**Modules with unit tests:**
-- `bitcoin/bitcoin_transaction.rs` - Bitcoin transaction serialization/deserialization
-- `bitcoin/bitcoin_transaction_builder.rs` - Bitcoin transaction builder logic
-- `bitcoin/types/` - Type-specific tests for Bitcoin primitives
-- `bitcoin/utils.rs` - Bitcoin utility functions
-- `evm/evm_transaction.rs` - EVM transaction serialization/deserialization
-- `evm/evm_transaction_builder.rs` - EVM transaction builder logic
-- `transaction_builder.rs` - High-level transaction builder tests
+## Running the tests
 
-### 2. Integration Tests
-Located in the `/tests` directory:
-- `basic_test.rs` - Basic integration tests without external dependencies
-- `bitcoin_integration_test.rs` - Bitcoin integration tests (requires external setup)
-- `evm_integration_test.rs` - EVM integration tests (requires Anvil)
-
-## Running Tests
-
-### Quick Test Commands
+Use the `justfile` recipe that CI runs:
 
 ```bash
-# Run all unit tests (recommended for quick validation)
-cargo test --lib
-
-# Run specific unit test module
-cargo test --lib bitcoin::bitcoin_transaction::tests
-
-# Run basic integration tests (no external deps needed)
-cargo test --test basic_test
-
-# Run all available tests
-cargo test
-
-# Run tests in release mode (optimized)
-cargo test --release
-
-# Run tests with output displayed
-cargo test -- --nocapture
-
-# Run a specific test by name
-cargo test test_bitcoin_transaction_builder
+just test-unit          # cargo test --lib — the full unit-test suite
 ```
 
-### Test Categories
-
-#### 1. Core Library Tests (Always Available)
-These tests validate the core functionality without any external dependencies:
+Or drive cargo directly:
 
 ```bash
-# Run only library unit tests
-cargo test --lib
-
-# Expected output: 59 tests passing
+cargo test --lib                     # all unit tests (default features: evm + bitcoin)
+cargo test --lib bitcoin::           # only the bitcoin module's tests
+cargo test --lib -- --nocapture      # show test stdout
+cargo test --lib test_der_encoding   # a single test by name substring
 ```
 
-#### 2. Basic Integration Tests (Always Available)
-Simple integration tests that verify the main APIs:
+### Feature combinations
+
+The default build enables both `evm` and `bitcoin`. CI only builds the default set, so feature-gating mistakes can hide — test each combination when you touch feature-gated code or its tests:
 
 ```bash
-# Run basic integration tests
-cargo test --test basic_test
-
-# Tests included:
-# - test_bitcoin_transaction_builder
-# - test_evm_transaction_builder
+cargo test --lib --no-default-features --features bitcoin
+cargo test --lib --no-default-features --features evm
+cargo test --lib --all-features
 ```
 
-#### 3. Full Integration Tests (Requires Setup)
-
-**Bitcoin Integration Tests:**
-Requires bitcoin test infrastructure. Currently depends on `omni_testing_utilities`.
+Also confirm the crate still compiles for the Substrate / wasm target after changing dependencies or imports:
 
 ```bash
-# Would need bitcoin testnet setup
-cargo test --test bitcoin_integration_test
+just check-wasm         # cargo check --target wasm32-unknown-unknown
 ```
 
-**EVM Integration Tests:**
-Requires Anvil (local Ethereum node) to be installed:
+## How correctness is enforced
 
-```bash
-# Install Anvil first
-curl -L https://foundry.paradigm.xyz | bash
-foundryup
+Encoding correctness is pinned by **differential (oracle) tests**: the crate's output is compared against battle-tested reference implementations pulled in as dev-dependencies — `alloy` / `alloy-rlp` for EVM (EIP-1559 RLP encoding and signatures), and `rust-bitcoin` plus `k256` for Bitcoin (sighash, DER / low-S signatures, scripts).
 
-# Then run EVM tests
-cargo test --test evm_integration_test
-```
+When adding or changing encoding logic, assert against these references rather than hand-written hex. This is how the suite catches subtle consensus bugs such as minimal DER per BIP-66, canonical RLP integers, BIP-143 SegWit preimages, and txid byte order.
 
-## Testing Specific Features
+## Writing new tests
 
-### Bitcoin-only Tests
-```bash
-cargo test --lib --features bitcoin --no-default-features
-```
-
-### EVM-only Tests
-```bash
-cargo test --lib --features evm --no-default-features
-```
-
-## Test Coverage Areas
-
-### Bitcoin Module Testing
-- Transaction serialization/deserialization
-- Script building and validation
-- Sighash calculation
-- Type conversions (Version, LockTime, Amount, etc.)
-- JSON parsing and encoding
-- Witness data handling
-
-### EVM Module Testing
-- EIP-1559 transaction building
-- RLP encoding/decoding
-- Address parsing
-- Access list handling
-- Signature handling
-- Gas fee calculations
-
-## Writing New Tests
-
-### Adding Unit Tests
-Add tests within the module file using the `#[cfg(test)]` attribute:
+Add tests inline in the module under test:
 
 ```rust
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
-    fn test_my_function() {
-        // Test implementation
+    fn encodes_like_the_reference() {
+        // build with signet-rs, then compare against alloy / rust-bitcoin
     }
 }
 ```
 
-### Adding Integration Tests
-Create a new file in the `/tests` directory:
+If the code or test is specific to a chain feature, gate it so single-feature builds stay green:
 
 ```rust
-// tests/my_integration_test.rs
-use signet_rs::{TransactionBuilder, TxBuilder};
-
-#[test]
-fn test_integration_scenario() {
-    // Test implementation
-}
+#[cfg(all(test, feature = "evm"))]
+mod evm_tests { /* ... */ }
 ```
 
-## Continuous Integration
+## Continuous integration
 
-For CI/CD pipelines, use these commands:
-
-```bash
-# Basic CI test suite (no external deps)
-cargo test --lib --test basic_test
-
-# Full test suite (requires all dependencies)
-cargo test --all
-
-# With specific features
-cargo test --all-features
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **"No such file or directory" error in integration tests**
-   - This usually means external dependencies (Anvil, Bitcoin testnet) are not set up
-   - Run `cargo test --lib --test basic_test` for tests without external dependencies
-
-2. **Compilation errors after changes**
-   - Run `cargo clean` then `cargo build`
-   - Check that all features compile: `cargo check --all-features`
-
-3. **Test failures after modifying types**
-   - Ensure serialization/deserialization tests are updated
-   - Check that test vectors match the new format
-
-## Performance Testing
-
-Run benchmarks (if available):
-```bash
-cargo bench
-```
-
-Run tests with timing information:
-```bash
-cargo test -- --show-output --test-threads=1
-```
-
-## Summary
-
-- **Quick validation**: `cargo test --lib --test basic_test` (61 total tests)
-- **Full validation**: `cargo test` (requires external setup)
-- **Bitcoin only**: `cargo test --lib --features bitcoin --no-default-features`
-- **EVM only**: `cargo test --lib --features evm --no-default-features`
-
-The library is well-tested with comprehensive unit tests covering all core functionality. Integration tests are available for more complex scenarios but require additional setup.
+`.github/workflows/test.yml` gates every PR: `just fmt`, `just lint` (clippy with `-D clippy::all -D clippy::nursery`), a doc build with `RUSTDOCFLAGS="-D warnings"`, `just check`, `just check-wasm`, then `just test-unit` on stable and nightly. The unit-test job also installs the Foundry toolchain (the `alloy` dev-dependency enables its `node-bindings` feature). Run the same `just` recipes locally before pushing.
