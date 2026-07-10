@@ -24,10 +24,14 @@ fn encode_signature_as_der(signature_bytes: &[u8]) -> Vec<u8> {
 }
 
 fn encode_asn1_integer(bytes: &[u8]) -> Vec<u8> {
-    let mut integer = bytes.to_vec();
+    // DER integers must be minimal (BIP-66): strip leading zero bytes, keeping
+    // at least one byte so a zero value is still encoded as a single 0x00.
+    let first_nonzero = bytes.iter().position(|&b| b != 0).unwrap_or(bytes.len());
+    let start = first_nonzero.min(bytes.len().saturating_sub(1));
+    let mut integer = bytes[start..].to_vec();
 
-    // if the most significant bit is set, prepend a 0x00 byte
-    if integer[0] & 0x80 != 0 {
+    // If the most significant bit is set, prepend a 0x00 so the value stays positive.
+    if integer.first().copied().unwrap_or(0) & 0x80 != 0 {
         integer.insert(0, 0x00);
     }
 
@@ -102,6 +106,67 @@ mod tests {
             serialized_with_custom_function,
             serialized_with_bitcoin_bytes
         );
+    }
+
+    #[test]
+    fn test_der_encoding_leading_zero_r_matches_rust_bitcoin() {
+        // Regression: DER integers must be minimal (BIP-66). A scalar with a
+        // leading zero byte must have that byte stripped, or the signature is
+        // consensus-invalid and the spend is rejected.
+        let mut sig_bytes = [0u8; 64];
+        sig_bytes[0] = 0x00; // r has a leading zero byte
+        for b in &mut sig_bytes[1..32] {
+            *b = 0x11;
+        }
+        for b in &mut sig_bytes[32..64] {
+            *b = 0x22; // s: valid low-S, no leading zero
+        }
+
+        let secp_sig = Signature::from_compact(&sig_bytes).unwrap();
+        let mut expected = secp_sig.serialize_der().to_vec();
+        expected.push(0x01); // SIGHASH_ALL
+
+        let ours = serialize_ecdsa_signature(&sig_bytes, 0x01);
+        assert_eq!(ours, expected);
+    }
+
+    #[test]
+    fn test_der_encoding_leading_zero_s_matches_rust_bitcoin() {
+        let mut sig_bytes = [0u8; 64];
+        for b in &mut sig_bytes[0..32] {
+            *b = 0x33; // r: no leading zero
+        }
+        sig_bytes[32] = 0x00; // s has a leading zero byte
+        for b in &mut sig_bytes[33..64] {
+            *b = 0x22;
+        }
+
+        let secp_sig = Signature::from_compact(&sig_bytes).unwrap();
+        let mut expected = secp_sig.serialize_der().to_vec();
+        expected.push(0x01);
+
+        let ours = serialize_ecdsa_signature(&sig_bytes, 0x01);
+        assert_eq!(ours, expected);
+    }
+
+    #[test]
+    fn test_der_encoding_required_sign_padding_matches_rust_bitcoin() {
+        // When the high bit of the leading significant byte is set, DER requires
+        // a single 0x00 pad. The fix must keep exactly that byte and no more.
+        let mut sig_bytes = [0u8; 64];
+        sig_bytes[0] = 0x80; // r's MSB set -> requires a 0x00 sign pad
+        for b in &mut sig_bytes[32..64] {
+            *b = 0x22;
+        }
+        // s low value with high bit set on its leading byte too.
+        sig_bytes[32] = 0x80;
+
+        let secp_sig = Signature::from_compact(&sig_bytes).unwrap();
+        let mut expected = secp_sig.serialize_der().to_vec();
+        expected.push(0x01);
+
+        let ours = serialize_ecdsa_signature(&sig_bytes, 0x01);
+        assert_eq!(ours, expected);
     }
 
     // using the bitcoin crate

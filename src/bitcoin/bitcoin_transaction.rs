@@ -178,11 +178,10 @@ impl BitcoinTransaction {
         buffer
     }
 
-    /// Encode the transaction for signing in SegWit format
+    /// Encode the transaction for signing in SegWit format (BIP-143).
     ///
-    /// # Panics
-    ///
-    /// Panics if the transaction version is not [`Version::Two`].
+    /// Works for both version 1 and version 2 transactions; the BIP-143 sighash
+    /// preimage does not depend on the transaction version.
     pub fn build_for_signing_segwit(
         &self,
         sighash_type: EcdsaSighashType,
@@ -190,10 +189,6 @@ impl BitcoinTransaction {
         script_code: &ScriptBuf,
         value: u64,
     ) -> Vec<u8> {
-        if self.version != Version::Two {
-            panic!("SegWit transactions must be version 2");
-        }
-
         let mut buffer = Vec::new();
 
         self.encode_for_sighash_for_segwit(&mut buffer, input_index, script_code, value);
@@ -607,6 +602,72 @@ mod tests {
     }
 
     #[test]
+    fn test_segwit_sighash_version_1_matches_rust_bitcoin() {
+        // Regression: BIP-143 segwit v0 sighash is valid for version 1 as well
+        // as version 2. build_for_signing_segwit must not reject version 1.
+        let height = 500_000;
+        let script_bytes =
+            hex::decode("76a914cb8a3018cf279311b148cb8d13728bd8cbe95bda88ac").unwrap();
+        let value_sats: u64 = 100_000_000;
+
+        let mut rb_tx = RustBitcoinTransaction {
+            version: RustBitcoinVersion(1),
+            lock_time: RustBitcoinLockTime::from_height(height).unwrap(),
+            input: vec![RustBitcoinTxIn {
+                previous_output: OutPoint {
+                    txid: Txid::from_raw_hash(Hash::from_byte_array([0x11; 32])),
+                    vout: 0,
+                },
+                script_sig: ScriptBuf::default(),
+                sequence: RustBitcoinSequence::MAX,
+                witness: Witness::default(),
+            }],
+            output: vec![RustBitcoinTxOut {
+                value: Amount::from_sat(90_000_000),
+                script_pubkey: ScriptBuf::from_bytes(script_bytes.clone()),
+            }],
+        };
+
+        let mut rb_buf: Vec<u8> = Vec::new();
+        SighashCache::new(&mut rb_tx)
+            .segwit_v0_encode_signing_data_to(
+                &mut rb_buf,
+                0,
+                &ScriptBuf::from_bytes(script_bytes.clone()),
+                Amount::from_sat(value_sats),
+                EcdsaSighashType::All,
+            )
+            .unwrap();
+
+        let our_tx = OmniBitcoinTransaction {
+            version: Version::One,
+            lock_time: LockTime::from_height(height).unwrap(),
+            input: vec![TxIn {
+                previous_output: OmniOutPoint {
+                    txid: OmniTxid(OmniHash([0x11; 32])),
+                    vout: 0,
+                },
+                script_sig: OmniScriptBuf::default(),
+                sequence: OmniSequence::MAX,
+                witness: OmniWitness::default(),
+            }],
+            output: vec![TxOut {
+                value: OmniAmount::from_sat(90_000_000),
+                script_pubkey: OmniScriptBuf(script_bytes.clone()),
+            }],
+        };
+
+        let our_buf = our_tx.build_for_signing_segwit(
+            OmniSighashType::All,
+            0,
+            &OmniScriptBuf(script_bytes),
+            value_sats,
+        );
+
+        assert_eq!(rb_buf, our_buf);
+    }
+
+    #[test]
     fn test_from_json_bitcoin_transaction() {
         let json = r#"
         {
@@ -990,7 +1051,7 @@ mod tests {
             lock_time: LockTime::from_height(500_000).unwrap(),
             input: vec![TxIn {
                 previous_output: OmniOutPoint {
-                    txid: OmniTxid(OmniHash(display_arr)),
+                    txid: OmniTxid(OmniHash(internal_arr)),
                     vout: 1,
                 },
                 script_sig: OmniScriptBuf::default(),
@@ -2054,7 +2115,7 @@ mod tests {
             input: vec![
                 TxIn {
                     previous_output: OmniOutPoint {
-                        txid: OmniTxid(OmniHash(display_arr)),
+                        txid: OmniTxid(OmniHash(internal_arr)),
                         vout: 0,
                     },
                     script_sig: OmniScriptBuf::default(),
@@ -2063,7 +2124,7 @@ mod tests {
                 },
                 TxIn {
                     previous_output: OmniOutPoint {
-                        txid: OmniTxid(OmniHash(display_arr)),
+                        txid: OmniTxid(OmniHash(internal_arr)),
                         vout: 1,
                     },
                     script_sig: OmniScriptBuf::default(),
@@ -2149,5 +2210,87 @@ mod tests {
         let our_buf = our_tx.build_for_signing_legacy(OmniSighashType::All);
 
         assert_eq!(rb_buf, our_buf, "Legacy sighash must exclude witness data");
+    }
+
+    #[test]
+    fn test_compute_txid_chains_into_outpoint_matches_rust_bitcoin() {
+        // Regression: a txid produced by compute_txid() must serialize in the
+        // same (internal) byte order as rust-bitcoin when reused as an input's
+        // previous_output. Otherwise a chained spend references a byteswapped,
+        // nonexistent output.
+        let script_bytes =
+            hex::decode("76a914cb8a3018cf279311b148cb8d13728bd8cbe95bda88ac").unwrap();
+
+        // --- rust-bitcoin: parent, then child spending parent's output 0 ---
+        let rb_parent = RustBitcoinTransaction {
+            version: RustBitcoinVersion::TWO,
+            lock_time: RustBitcoinLockTime::from_height(0).unwrap(),
+            input: vec![RustBitcoinTxIn {
+                previous_output: OutPoint::null(),
+                script_sig: ScriptBuf::default(),
+                sequence: RustBitcoinSequence::MAX,
+                witness: Witness::default(),
+            }],
+            output: vec![RustBitcoinTxOut {
+                value: Amount::from_sat(50_000),
+                script_pubkey: ScriptBuf::from_bytes(script_bytes.clone()),
+            }],
+        };
+        let rb_parent_txid = rb_parent.compute_txid();
+        let rb_child = RustBitcoinTransaction {
+            version: RustBitcoinVersion::TWO,
+            lock_time: RustBitcoinLockTime::from_height(0).unwrap(),
+            input: vec![RustBitcoinTxIn {
+                previous_output: OutPoint {
+                    txid: rb_parent_txid,
+                    vout: 0,
+                },
+                script_sig: ScriptBuf::default(),
+                sequence: RustBitcoinSequence::MAX,
+                witness: Witness::default(),
+            }],
+            output: vec![RustBitcoinTxOut {
+                value: Amount::from_sat(40_000),
+                script_pubkey: ScriptBuf::from_bytes(script_bytes.clone()),
+            }],
+        };
+        let rb_child_serialized = bitcoin::consensus::serialize(&rb_child);
+
+        // --- ours: same construction ---
+        let our_parent = OmniBitcoinTransaction {
+            version: Version::Two,
+            lock_time: LockTime::from_height(0).unwrap(),
+            input: vec![TxIn {
+                previous_output: OmniOutPoint::null(),
+                script_sig: OmniScriptBuf::default(),
+                sequence: OmniSequence::MAX,
+                witness: OmniWitness::default(),
+            }],
+            output: vec![TxOut {
+                value: OmniAmount::from_sat(50_000),
+                script_pubkey: OmniScriptBuf(script_bytes.clone()),
+            }],
+        };
+        let our_parent_txid = our_parent.compute_txid();
+        let our_child = OmniBitcoinTransaction {
+            version: Version::Two,
+            lock_time: LockTime::from_height(0).unwrap(),
+            input: vec![TxIn {
+                previous_output: OmniOutPoint {
+                    txid: our_parent_txid,
+                    vout: 0,
+                },
+                script_sig: OmniScriptBuf::default(),
+                sequence: OmniSequence::MAX,
+                witness: OmniWitness::default(),
+            }],
+            output: vec![TxOut {
+                value: OmniAmount::from_sat(40_000),
+                script_pubkey: OmniScriptBuf(script_bytes),
+            }],
+        };
+        let our_child_serialized = our_child.serialize();
+
+        assert_eq!(rb_child_serialized, our_child_serialized);
     }
 }
