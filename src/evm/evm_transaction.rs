@@ -1,6 +1,6 @@
 //! EVM transaction
 use super::types::{AccessList, Address, Signature};
-use super::utils::parse_eth_address;
+use super::utils::parse_eth_address_checked;
 use crate::constants::EIP_1559_TYPE;
 use core::fmt;
 use rlp::RlpStream;
@@ -8,7 +8,7 @@ use serde::de::{Error as DeError, Visitor};
 use serde::Deserializer;
 use serde::{Deserialize, Serialize};
 
-use alloc::{string::ToString, vec, vec::Vec};
+use alloc::{vec, vec::Vec};
 
 /// An EIP-1559 (type-2) transaction ready for RLP encoding and signing.
 ///
@@ -93,8 +93,11 @@ impl EVMTransaction {
         self.encode_fields(&mut rlp_stream);
 
         rlp_stream.append(&signature.v);
-        rlp_stream.append(&signature.r);
-        rlp_stream.append(&signature.s);
+        // r and s are RLP integers: encode them minimally (no leading zero
+        // bytes), otherwise a scalar with a leading zero yields a non-canonical
+        // integer that Ethereum nodes reject ("rlp: non-canonical integer").
+        rlp_stream.append(&trim_leading_zeros(&signature.r).to_vec());
+        rlp_stream.append(&trim_leading_zeros(&signature.s).to_vec());
 
         rlp_stream.finalize_unbounded_list();
 
@@ -146,14 +149,15 @@ impl EVMTransaction {
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         let v: serde_json::Value = serde_json::from_str(json)?;
 
+        let err = |msg: &str| serde_json::Error::custom(alloc::string::String::from(msg));
+
         let to_parsed = match v["to"].as_str() {
-            Some(s) if !s.is_empty() && s != "0x" => {
-                Some(parse_eth_address(s.strip_prefix("0x").unwrap_or(s)))
-            }
+            Some(s) if !s.is_empty() && s != "0x" => Some(
+                parse_eth_address_checked(s)
+                    .ok_or_else(|| err("to should be a valid 20-byte address"))?,
+            ),
             _ => None,
         };
-
-        let err = |msg: &str| serde_json::Error::custom(alloc::string::String::from(msg));
 
         let nonce_str = v["nonce"]
             .as_str()
@@ -188,39 +192,43 @@ impl EVMTransaction {
             .ok_or_else(|| err("chainId should be provided"))?;
         let chain_id = parse_u64(chain_id_str).map_err(|_| err("chainId should be a valid u64"))?;
 
-        let input = v["input"].as_str().unwrap_or_default().to_string();
-        let input = hex::decode(input.strip_prefix("0x").unwrap_or(""))
+        let input_str = v["input"].as_str().unwrap_or_default();
+        let input = hex::decode(input_str.strip_prefix("0x").unwrap_or(input_str))
             .map_err(|_| err("input should be valid hex"))?;
 
-        let access_list = v["accessList"]
-            .as_array()
-            .map(|entries| {
-                entries
-                    .iter()
-                    .filter_map(|entry| {
-                        let addr_str = entry["address"].as_str()?;
-                        let addr =
-                            parse_eth_address(addr_str.strip_prefix("0x").unwrap_or(addr_str));
-                        let keys = entry["storageKeys"]
-                            .as_array()
-                            .map(|keys| {
-                                keys.iter()
-                                    .filter_map(|k| {
-                                        let s = k.as_str()?;
-                                        let bytes =
-                                            hex::decode(s.strip_prefix("0x").unwrap_or(s)).ok()?;
-                                        let mut key = [0u8; 32];
-                                        key.copy_from_slice(&bytes);
-                                        Some(key)
-                                    })
-                                    .collect()
-                            })
-                            .unwrap_or_default();
-                        Some((addr, keys))
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        let access_list: AccessList = match v["accessList"].as_array() {
+            Some(entries) => {
+                let mut list = Vec::with_capacity(entries.len());
+                for entry in entries {
+                    let addr_str = entry["address"]
+                        .as_str()
+                        .ok_or_else(|| err("accessList entry address should be a string"))?;
+                    let addr = parse_eth_address_checked(addr_str).ok_or_else(|| {
+                        err("accessList entry address should be a valid 20-byte address")
+                    })?;
+
+                    let mut keys: Vec<[u8; 32]> = Vec::new();
+                    if let Some(key_entries) = entry["storageKeys"].as_array() {
+                        for k in key_entries {
+                            let s = k
+                                .as_str()
+                                .ok_or_else(|| err("storageKey should be a hex string"))?;
+                            let bytes = hex::decode(s.strip_prefix("0x").unwrap_or(s))
+                                .map_err(|_| err("storageKey should be valid hex"))?;
+                            if bytes.len() != 32 {
+                                return Err(err("storageKey should be 32 bytes"));
+                            }
+                            let mut key = [0u8; 32];
+                            key.copy_from_slice(&bytes);
+                            keys.push(key);
+                        }
+                    }
+                    list.push((addr, keys));
+                }
+                list
+            }
+            None => Vec::new(),
+        };
 
         Ok(Self {
             chain_id,
@@ -234,6 +242,14 @@ impl EVMTransaction {
             access_list,
         })
     }
+}
+
+/// Returns the sub-slice with leading zero bytes removed, yielding the minimal
+/// big-endian representation used by RLP integer encoding. An all-zero input
+/// returns an empty slice (RLP-encoded as the integer zero).
+fn trim_leading_zeros(bytes: &[u8]) -> &[u8] {
+    let first_nonzero = bytes.iter().position(|&b| b != 0).unwrap_or(bytes.len());
+    &bytes[first_nonzero..]
 }
 
 fn parse_u64(value: &str) -> Result<u64, core::num::ParseIntError> {
@@ -1352,5 +1368,237 @@ mod tests {
         rlp_encoded.encode_for_signing(&mut buf);
 
         assert_eq!(buf, rlp_empty);
+    }
+
+    // Helper: build a canonical EIP-1559 signed encoding with alloy for the given
+    // 32-byte big-endian r/s scalars and yParity, to use as the oracle.
+    #[allow(deprecated, clippy::too_many_arguments)]
+    fn alloy_signed_encoding(
+        chain_id: u64,
+        nonce: u64,
+        gas_limit: u128,
+        to: Address,
+        value: u128,
+        input: &[u8],
+        max_fee_per_gas: u128,
+        max_priority_fee_per_gas: u128,
+        r: [u8; 32],
+        s: [u8; 32],
+        y_parity: bool,
+    ) -> Vec<u8> {
+        let tx = TxEip1559 {
+            chain_id,
+            nonce,
+            gas_limit,
+            to: TxKind::Call(to),
+            value: U256::from(value),
+            input: Bytes::copy_from_slice(input),
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            access_list: AccessList::default(),
+        };
+        let sig = Signature::from_scalars_and_parity(
+            alloy_primitives::B256::from(r),
+            alloy_primitives::B256::from(s),
+            y_parity,
+        )
+        .unwrap();
+        let mut out = vec![];
+        tx.encode_with_signature(&sig, &mut out, false);
+        out
+    }
+
+    #[test]
+    fn test_build_with_signature_leading_zero_r_matches_alloy() {
+        // Regression: r/s must be RLP-encoded as minimal-length integers.
+        // A scalar with a leading zero byte (~0.4% of signatures per scalar)
+        // must not be encoded with the leading zero, or nodes reject the tx
+        // with "rlp: non-canonical integer (leading zeroes)".
+        let chain_id = 1u64;
+        let nonce = 0x42u64;
+        let gas_limit = 44_386u128;
+        let to = parse_eth_address("6069a6c32cf691f5982febae4faf8a6f3ab2f0f6");
+        let value = 0u128;
+        let max_fee_per_gas = 0x4a817c800u128;
+        let max_priority_fee_per_gas = 0x3b9aca00u128;
+        let input = hex!("a22cb465").to_vec();
+
+        // r has a leading zero byte; s does not.
+        let mut r = [0x11u8; 32];
+        r[0] = 0x00;
+        let s = [0x22u8; 32];
+
+        let tx_omni = EVMTransaction {
+            chain_id,
+            nonce,
+            to: Some(to),
+            value,
+            input: input.clone(),
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            access_list: vec![],
+        };
+        let omni_sig = OmniSignature {
+            v: 0,
+            r: r.to_vec(),
+            s: s.to_vec(),
+        };
+        let omni_encoded = tx_omni.build_with_signature(&omni_sig);
+
+        let alloy_encoded = alloy_signed_encoding(
+            chain_id,
+            nonce,
+            gas_limit,
+            address!("6069a6c32cf691f5982febae4faf8a6f3ab2f0f6"),
+            value,
+            &input,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            r,
+            s,
+            false,
+        );
+
+        assert_eq!(alloy_encoded, omni_encoded);
+    }
+
+    #[test]
+    fn test_build_with_signature_leading_zero_s_matches_alloy() {
+        let chain_id = 1u64;
+        let nonce = 7u64;
+        let gas_limit = 21_000u128;
+        let to = parse_eth_address("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
+        let value = 1_000u128;
+        let max_fee_per_gas = 20_000_000_000u128;
+        let max_priority_fee_per_gas = 1_000_000_000u128;
+        let input: Vec<u8> = vec![];
+
+        let r = [0x33u8; 32];
+        let mut s = [0x44u8; 32];
+        s[0] = 0x00;
+
+        let tx_omni = EVMTransaction {
+            chain_id,
+            nonce,
+            to: Some(to),
+            value,
+            input: input.clone(),
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            access_list: vec![],
+        };
+        let omni_sig = OmniSignature {
+            v: 1,
+            r: r.to_vec(),
+            s: s.to_vec(),
+        };
+        let omni_encoded = tx_omni.build_with_signature(&omni_sig);
+
+        let alloy_encoded = alloy_signed_encoding(
+            chain_id,
+            nonce,
+            gas_limit,
+            address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"),
+            value,
+            &input,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            r,
+            s,
+            true,
+        );
+
+        assert_eq!(alloy_encoded, omni_encoded);
+    }
+
+    #[test]
+    fn test_from_json_bare_hex_input_is_decoded() {
+        // Regression: input hex without a `0x` prefix must be decoded, not
+        // silently dropped to empty calldata (which would turn a contract call
+        // into a plain value transfer).
+        let json = r#"{
+            "to": "0x525521d79134822a342d330bd91DA67976569aF1",
+            "nonce": "1",
+            "value": "0",
+            "maxPriorityFeePerGas": "0x1",
+            "maxFeePerGas": "0x1",
+            "gasLimit": "21000",
+            "chainId": "1",
+            "input": "6a627842"
+        }"#;
+
+        let tx = EVMTransaction::from_json(json).unwrap();
+        assert_eq!(tx.input, vec![0x6a, 0x62, 0x78, 0x42]);
+    }
+
+    #[test]
+    fn test_from_json_invalid_input_hex_errors() {
+        let json = r#"{
+            "to": "0x525521d79134822a342d330bd91DA67976569aF1",
+            "nonce": "1",
+            "value": "0",
+            "maxPriorityFeePerGas": "0x1",
+            "maxFeePerGas": "0x1",
+            "gasLimit": "21000",
+            "chainId": "1",
+            "input": "zzzz"
+        }"#;
+
+        assert!(EVMTransaction::from_json(json).is_err());
+    }
+
+    #[test]
+    fn test_from_json_short_storage_key_errors() {
+        // Regression: a non-32-byte storage key must return Err, not panic in
+        // copy_from_slice.
+        let json = r#"{
+            "to": "0x525521d79134822a342d330bd91DA67976569aF1",
+            "nonce": "1",
+            "value": "0",
+            "maxPriorityFeePerGas": "0x1",
+            "maxFeePerGas": "0x1",
+            "gasLimit": "21000",
+            "chainId": "1",
+            "accessList": [
+                { "address": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", "storageKeys": ["0x01"] }
+            ]
+        }"#;
+
+        assert!(EVMTransaction::from_json(json).is_err());
+    }
+
+    #[test]
+    fn test_from_json_invalid_to_address_errors() {
+        let json = r#"{
+            "to": "0xZZ",
+            "nonce": "1",
+            "value": "0",
+            "maxPriorityFeePerGas": "0x1",
+            "maxFeePerGas": "0x1",
+            "gasLimit": "21000",
+            "chainId": "1"
+        }"#;
+
+        assert!(EVMTransaction::from_json(json).is_err());
+    }
+
+    #[test]
+    fn test_from_json_invalid_access_list_address_errors() {
+        let json = r#"{
+            "to": "0x525521d79134822a342d330bd91DA67976569aF1",
+            "nonce": "1",
+            "value": "0",
+            "maxPriorityFeePerGas": "0x1",
+            "maxFeePerGas": "0x1",
+            "gasLimit": "21000",
+            "chainId": "1",
+            "accessList": [
+                { "address": "0x1234", "storageKeys": [] }
+            ]
+        }"#;
+
+        assert!(EVMTransaction::from_json(json).is_err());
     }
 }
