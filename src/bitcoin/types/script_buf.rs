@@ -29,9 +29,15 @@ impl ScriptBuf {
         Self(bytes)
     }
 
+    /// Returns the BIP-143 P2WPKH script code for the 20-byte public key hash
+    /// held in `self`: `OP_DUP OP_HASH160 <hash> OP_EQUALVERIFY OP_CHECKSIG`
+    /// (`76a914{hash}88ac`). This is the `script_code` argument expected by
+    /// [`build_for_signing_segwit`](crate::bitcoin::BitcoinTransaction::build_for_signing_segwit)
+    /// when signing a P2WPKH input.
     pub fn p2wpkh_script_code(&self) -> Self {
-        let mut script = vec![0x00, 0x14];
+        let mut script = vec![0x76, 0xa9, 0x14];
         script.extend_from_slice(&self.0);
+        script.extend_from_slice(&[0x88, 0xac]);
         Self(script)
     }
 }
@@ -139,5 +145,29 @@ impl<'de> serde::Deserialize<'de> for ScriptBuf {
             }
             deserializer.deserialize_byte_buf(BytesVisitor)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ScriptBuf;
+
+    #[test]
+    fn test_p2wpkh_script_code_matches_rust_bitcoin() {
+        use bitcoin::hashes::Hash as _;
+        use bitcoin::{PubkeyHash, ScriptBuf as RbScriptBuf};
+
+        // 20-byte HASH160 of a compressed public key.
+        let pubkey_hash: [u8; 20] = [
+            0xcb, 0x8a, 0x30, 0x18, 0xcf, 0x27, 0x93, 0x11, 0xb1, 0x48, 0xcb, 0x8d, 0x13, 0x72,
+            0x8b, 0xd8, 0xcb, 0xe9, 0x5b, 0xda,
+        ];
+
+        let our_script_code = ScriptBuf(pubkey_hash.to_vec()).p2wpkh_script_code();
+
+        // BIP-143 P2WPKH scriptCode is the P2PKH script for the same key hash.
+        let rb_script_code = RbScriptBuf::new_p2pkh(&PubkeyHash::from_byte_array(pubkey_hash));
+
+        assert_eq!(our_script_code.0.as_slice(), rb_script_code.as_bytes());
     }
 }

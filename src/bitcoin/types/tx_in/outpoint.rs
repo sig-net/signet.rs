@@ -105,7 +105,11 @@ impl<'de> serde::de::Visitor<'de> for OutPointVisitor {
                     let txid_value: serde_json::Value = map.next_value()?;
                     let txid_bytes = match txid_value {
                         serde_json::Value::String(txid_str) => {
-                            hex::decode(&txid_str).map_err(serde::de::Error::custom)?
+                            // Hex txid strings are display order; store internally.
+                            let mut bytes =
+                                hex::decode(&txid_str).map_err(serde::de::Error::custom)?;
+                            bytes.reverse();
+                            bytes
                         }
                         serde_json::Value::Array(txid_array) => txid_array
                             .into_iter()
