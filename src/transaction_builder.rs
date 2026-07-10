@@ -21,7 +21,7 @@ impl TransactionBuilder {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "evm"))]
 mod tests {
     use super::{TransactionBuilder as OmniTransactionBuilder, TxBuilder};
     use crate::{evm::utils::parse_eth_address, transaction_builders::EVM};
