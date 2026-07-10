@@ -5,6 +5,19 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2](https://github.com/sig-net/signet.rs/compare/v1.0.1...v1.0.2) - 2026-07-10
+
+### Fixed
+
+- *(build)* gate EVM-only builder test behind evm feature
+- *(bitcoin)* minimal DER, real P2WPKH script code, txid byte order
+- *(evm)* canonical RLP signatures and safe JSON parsing
+
+### Other
+
+- modernize release-plz workflow (split jobs, current action)
+- fall back to built-in GITHUB_TOKEN in release-plz workflow
+
 ## [1.0.1] - 2026-03-28
 
 ### Fixed
